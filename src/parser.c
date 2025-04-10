@@ -33,6 +33,12 @@ static Expr* parse_primary(Parser* parser) {
             expr->literal_type = LITERAL_STRING;
             break;
 
+        case TOKEN_PRINT:
+            Stmt* stmt = malloc(sizeof(Stmt));
+            stmt->type = STMT_PRINT;
+            stmt->print.expression = expr;
+            break;
+
         case TOKEN_IDENTIFIER:
             expr->type = EXPR_VARIABLE;
             expr->variable.name = parser->current.lexeme;
@@ -51,6 +57,16 @@ static Expr* parse_expression(Parser *parser) {
     return parse_primary(parser);
 }
 
+static Stmt* parse_print_stmt(Parser* parser) {
+    advance(parser); // consumir o 'print'
+    Expr* expression = parse_expression(parser);
+
+    Stmt* stmt = malloc(sizeof(Stmt));
+    stmt->type = STMT_PRINT;
+    stmt->print.expression = expression;
+    return stmt;
+}
+
 StmtList parse(Lexer *lexer) {
     Parser parser;
     parser.lexer = *lexer;
@@ -62,28 +78,36 @@ StmtList parse(Lexer *lexer) {
         if (match(&parser, TOKEN_LET)) {
             Token name = parser.current;
             advance(&parser); // nome da variável
-
+    
             match(&parser, TOKEN_COLON);
-            advance(&parser); // tipo
-
+            advance(&parser); // tipo (ignorado por enquanto)
+    
             match(&parser, TOKEN_ASSIGN);
             Expr *value = parse_expression(&parser);
-
+    
             Stmt *stmt = malloc(sizeof(Stmt));
             stmt->type = STMT_LET;
             stmt->let.name = name.lexeme;
             stmt->let.value = value;
-
+    
+            if (list.count >= list.capacity) {
+                list.capacity = list.capacity < 8 ? 8 : list.capacity * 2;
+                list.statements = realloc(list.statements, list.capacity * sizeof(Stmt *));
+            }
+            list.statements[list.count++] = stmt;
+        } else if (parser.current.type == TOKEN_PRINT) {
+            Stmt* stmt = parse_print_stmt(&parser);
+    
             if (list.count >= list.capacity) {
                 list.capacity = list.capacity < 8 ? 8 : list.capacity * 2;
                 list.statements = realloc(list.statements, list.capacity * sizeof(Stmt *));
             }
             list.statements[list.count++] = stmt;
         } else {
-            printf("[ERRO] Esperado 'let'\n");
+            printf("[ERRO] Esperado 'let' ou 'print'\n");
             exit(1);
         }
-    }
+    }    
 
     return list;
 }

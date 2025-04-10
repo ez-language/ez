@@ -34,7 +34,8 @@ typedef struct Expr {
 } Expr;
 
 typedef enum {
-    STMT_LET
+    STMT_LET,
+    STMT_PRINT
 } StmtType;
 
 typedef struct {
@@ -42,10 +43,15 @@ typedef struct {
     Expr *value;
 } LetStmt;
 
+typedef struct {
+    Expr* expression;
+} PrintStmt;
+
 typedef struct Stmt {
     StmtType type;
     union {
         LetStmt let;
+        PrintStmt print;
     };
 } Stmt;
 

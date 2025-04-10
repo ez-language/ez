@@ -77,6 +77,7 @@ TokenType check_keyword(const char* text) {
     if (strcmp(text, "for") == 0) return TOKEN_FOR;
     if (strcmp(text, "while") == 0) return TOKEN_WHILE;
     if (strcmp(text, "function") == 0) return TOKEN_FUNCTION;
+    if (strcmp(text, "print") == 0) return TOKEN_PRINT;
     if (strcmp(text, "return") == 0) return TOKEN_RETURN;
     return TOKEN_IDENTIFIER;
 }

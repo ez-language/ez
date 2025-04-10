@@ -45,6 +45,7 @@ const char* token_type_to_string(TokenType type) {
         case TOKEN_FOR: return "FOR";
         case TOKEN_WHILE: return "WHILE";
         case TOKEN_FUNCTION: return "function";
+        case TOKEN_PRINT: return "print";
         case TOKEN_RETURN: return "RETURN";
         default: return "UNKNOWN";
     }

@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
+
 #include "interpreter.h"
 #include "lexer.h"
 #include "environment.h"
@@ -11,7 +13,11 @@ Environment global_env = {0};
 Value eval_expr(Expr* expr) {
     switch (expr->type) {
         case EXPR_LITERAL:
-            if (expr->literal_type == LITERAL_NUMBER) {
+            if (strcmp(expr->literal, "true") == 0) {
+                return (Value){ .type = VAL_BOOL, .boolean = true };
+            } else if (strcmp(expr->literal, "false") == 0) {
+                return (Value){ .type = VAL_BOOL, .boolean = false };
+            } else if (expr->literal_type == LITERAL_NUMBER) {
                 return (Value){ .type = VAL_NUMBER, .number = atof(expr->literal) };
             } else if (expr->literal_type == LITERAL_STRING) {
                 return (Value){ .type = VAL_STRING, .string = expr->literal };
@@ -53,11 +59,37 @@ Value eval_expr(Expr* expr) {
     exit(1);
 }
 
+void print_value(Value value) {
+    switch (value.type) {
+        case VAL_NUMBER:
+            printf("%f\n", value.number);
+            break;
+        case VAL_STRING:
+            printf("%s\n", value.string);
+            break;
+        case VAL_BOOL:
+            printf(value.boolean ? "true\n" : "false\n");
+            break;
+        default:
+            printf("[tipo desconhecido]\n");
+    }
+}
+
 void exec_stmt(Stmt* stmt) {
     switch (stmt->type) {
         case STMT_LET: {
             Value value = eval_expr(stmt->let.value);
             env_define(&global_env, stmt->let.name, value);
+
+            printf("[let] %s = ", stmt->let.name);
+            print_value(value);
+
+            break;
+        }
+
+        case STMT_PRINT: {
+            Value result = eval_expr(stmt->print.expression);
+            print_value(result);
             break;
         }
     }
@@ -65,21 +97,6 @@ void exec_stmt(Stmt* stmt) {
 
 void interpret(StmtList *stmts) {
     for (size_t i = 0; i < stmts->count; i++) {
-        Stmt *stmt = stmts->statements[i];
-        if (stmt->type == STMT_LET) {
-            Value result = eval_expr(stmt->let.value);
-            printf("[let] %s = ", stmt->let.name);
-            switch (result.type) {
-                case VAL_NUMBER:
-                    printf("%f\n", result.number);
-                    break;
-                case VAL_STRING:
-                    printf("%s\n", result.string);
-                    break;
-                default:
-                    printf("[tipo desconhecido]\n");
-                    break;
-            }
-        }
+        exec_stmt(stmts->statements[i]);
     }
 }
