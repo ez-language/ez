@@ -1,10 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "parser.h"
+#include "token.h"
+#include "interpreter.h"
 
 static void advance(Parser* parser) {
     parser->previous = parser->current;
-    parser->current = next_token(&parser->lexer);
+    parser->current = lexer_next_token(&parser->lexer);
 }
 
 static int match(Parser* parser, TokenType type) {
@@ -19,14 +21,14 @@ static Expr* parse_primary(Parser* parser) {
     if (parser->current.type == TOKEN_NUMBER) {
         Expr* expr = malloc(sizeof(Expr));
         expr->type = EXPR_LITERAL;
-        expr->literal = strdup(parser->current.value);
+        expr->literal = strdup(parser->current.lexeme);
         advance(parser);
         return expr;
     }
     if (parser->current.type == TOKEN_IDENTIFIER) {
         Expr* expr = malloc(sizeof(Expr));
         expr->type = EXPR_VARIABLE;
-        expr->variable.name = strdup(parser->current.value);
+        expr->variable.name = strdup(parser->current.lexeme);
         advance(parser);
         return expr;
     }
@@ -67,7 +69,7 @@ static Expr* parse_expression(Parser* parser) {
 
 Stmt* parse(const char* source) {
     Parser parser;
-    parser.lexer = create_lexer(source);
+    parser.lexer = lexer_init(source);
     advance(&parser);
 
     if (match(&parser, TOKEN_LET)) {
@@ -78,7 +80,7 @@ Stmt* parse(const char* source) {
 
         Stmt* stmt = malloc(sizeof(Stmt));
         stmt->type = STMT_LET;
-        stmt->let.name = strdup(name.value);
+        stmt->let.name = strdup(name.lexeme);
         stmt->let.value = value;
         return stmt;
     }

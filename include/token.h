@@ -2,6 +2,7 @@
 #define TOKEN_H
 
 typedef enum {
+    TOKEN_UNKNOWN,
     TOKEN_EOF,
     TOKEN_LET,
     TOKEN_IF,
