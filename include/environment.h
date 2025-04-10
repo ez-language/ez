@@ -1,18 +1,17 @@
 #ifndef ENVIRONMENT_H
 #define ENVIRONMENT_H
 
-typedef struct {
-    char *name;
-    char *value;
-} Variable;
+#include "interpreter.h"
+
+#define MAX_VARIABLES 256
 
 typedef struct {
-    Variable variables[100];
+    char *names[MAX_VARIABLES];
+    Value values[MAX_VARIABLES];
     int count;
 } Environment;
 
-void init_environment(Environment *env);
-void define_variable(Environment *env, const char *name, const char *value);
-const char* get_variable(Environment *env, const char *name);
+void env_define(Environment *env, const char *name, Value value);
+Value env_get(Environment *env, const char *name);
 
 #endif

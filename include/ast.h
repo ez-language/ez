@@ -10,11 +10,17 @@ typedef enum {
     EXPR_VARIABLE
 } ExprType;
 
+typedef enum {
+    LITERAL_NUMBER,
+    LITERAL_STRING
+} LiteralType;
+
 typedef struct Expr {
     ExprType type;
     union {
         struct {
-            char *literal;
+            const char *literal;
+            LiteralType literal_type;
         };
         struct {
             struct Expr *left;
@@ -22,7 +28,7 @@ typedef struct Expr {
             struct Expr *right;
         } binary;
         struct {
-            char *name;
+            const char *name;
         } variable;
     };
 } Expr;
@@ -32,7 +38,7 @@ typedef enum {
 } StmtType;
 
 typedef struct {
-    char *name;
+    const char *name;
     Expr *value;
 } LetStmt;
 

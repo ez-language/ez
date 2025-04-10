@@ -5,11 +5,17 @@
 #include "ast.h"
 
 typedef struct {
+    Lexer lexer;
     Token current;
     Token previous;
-    Lexer lexer;
 } Parser;
 
-Stmt* parse(const char *source);
+typedef struct {
+    Stmt **statements;
+    size_t count;
+    size_t capacity;
+} StmtList;
+
+StmtList parse(Lexer *lexer);
 
 #endif

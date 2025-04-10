@@ -1,18 +1,21 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
-#include "lexer.h"
-#include "ast.h"
+#include "parser.h"
 
 typedef enum {
-    VAL_NUMBER
+    VAL_NUMBER,
+    VAL_STRING
 } ValueType;
 
 typedef struct {
     ValueType type;
-    double number;
+    union {
+        double number;
+        const char *string;
+    };
 } Value;
 
-Value eval_expr(Expr* expr);
+void interpret(StmtList *stmts);
 
 #endif

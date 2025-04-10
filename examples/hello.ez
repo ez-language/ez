@@ -1,3 +1,1 @@
 let text: string = "Hello, World!"
-
-print(text)

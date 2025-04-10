@@ -23,18 +23,8 @@ int main(int argc, char **argv) {
     }
 
     Lexer lexer = lexer_init(buffer);
-    Token token;
-
-    do {
-        token = lexer_next_token(&lexer);
-        printf("Token: %s (%s)\n", token_type_to_string(token.type), token.lexeme);
-    } while (token.type != TOKEN_EOF);
-
-    printf("Final do source: [%c] (%d)\n", buffer[strlen(buffer) - 1], buffer[strlen(buffer) - 1]);
-
-    for (int i = 0; buffer[i] != '\0'; i++) {
-        printf("%03d (%c)\n", buffer[i], isprint(buffer[i]) ? buffer[i] : '.');
-    }
+    StmtList stmts = parse(&lexer);
+    interpret(&stmts);
 
     free(buffer);
     return 0;

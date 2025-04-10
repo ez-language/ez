@@ -1,15 +1,15 @@
 #include <stdlib.h>
-#include <string.h>
+#include <stdio.h>
 #include "parser.h"
 #include "token.h"
-#include "interpreter.h"
+#include "ast.h"
 
-static void advance(Parser* parser) {
+static void advance(Parser *parser) {
     parser->previous = parser->current;
     parser->current = lexer_next_token(&parser->lexer);
 }
 
-static int match(Parser* parser, TokenType type) {
+static int match(Parser *parser, TokenType type) {
     if (parser->current.type == type) {
         advance(parser);
         return 1;
@@ -18,72 +18,72 @@ static int match(Parser* parser, TokenType type) {
 }
 
 static Expr* parse_primary(Parser* parser) {
-    if (parser->current.type == TOKEN_NUMBER) {
-        Expr* expr = malloc(sizeof(Expr));
-        expr->type = EXPR_LITERAL;
-        expr->literal = strdup(parser->current.lexeme);
-        advance(parser);
-        return expr;
-    }
-    if (parser->current.type == TOKEN_IDENTIFIER) {
-        Expr* expr = malloc(sizeof(Expr));
-        expr->type = EXPR_VARIABLE;
-        expr->variable.name = strdup(parser->current.lexeme);
-        advance(parser);
-        return expr;
-    }
-    return NULL;
-}
+    Expr* expr = malloc(sizeof(Expr));
 
-static Expr* parse_factor(Parser* parser) {
-    Expr* expr = parse_primary(parser);
-    while (parser->current.type == TOKEN_STAR || parser->current.type == TOKEN_SLASH) {
-        Token operator = parser->current;
-        advance(parser);
-        Expr* right = parse_primary(parser);
-        Expr* binary = malloc(sizeof(Expr));
-        binary->type = EXPR_BINARY;
-        binary->binary.left = expr;
-        binary->binary.operator = operator;
-        binary->binary.right = right;
-        expr = binary;
+    switch (parser->current.type) {
+        case TOKEN_NUMBER:
+            expr->type = EXPR_LITERAL;
+            expr->literal = parser->current.lexeme;  // lexeme, não literal
+            expr->literal_type = LITERAL_NUMBER;
+            break;
+
+        case TOKEN_STRING:
+            expr->type = EXPR_LITERAL;
+            expr->literal = parser->current.lexeme;  // lexeme, não literal
+            expr->literal_type = LITERAL_STRING;
+            break;
+
+        case TOKEN_IDENTIFIER:
+            expr->type = EXPR_VARIABLE;
+            expr->variable.name = parser->current.lexeme;
+            break;
+
+        default:
+            printf("[ERRO] Expressão primária inválida\n");
+            exit(1);
     }
+
+    advance(parser);
     return expr;
 }
 
-static Expr* parse_expression(Parser* parser) {
-    Expr* expr = parse_factor(parser);
-    while (parser->current.type == TOKEN_PLUS || parser->current.type == TOKEN_MINUS) {
-        Token operator = parser->current;
-        advance(parser);
-        Expr* right = parse_factor(parser);
-        Expr* binary = malloc(sizeof(Expr));
-        binary->type = EXPR_BINARY;
-        binary->binary.left = expr;
-        binary->binary.operator = operator;
-        binary->binary.right = right;
-        expr = binary;
-    }
-    return expr;
+static Expr* parse_expression(Parser *parser) {
+    return parse_primary(parser);
 }
 
-Stmt* parse(const char* source) {
+StmtList parse(Lexer *lexer) {
     Parser parser;
-    parser.lexer = lexer_init(source);
+    parser.lexer = *lexer;
     advance(&parser);
 
-    if (match(&parser, TOKEN_LET)) {
-        Token name = parser.current;
-        advance(&parser);
-        match(&parser, TOKEN_ASSIGN);
-        Expr* value = parse_expression(&parser);
+    StmtList list = {0};
 
-        Stmt* stmt = malloc(sizeof(Stmt));
-        stmt->type = STMT_LET;
-        stmt->let.name = strdup(name.lexeme);
-        stmt->let.value = value;
-        return stmt;
+    while (parser.current.type != TOKEN_EOF) {
+        if (match(&parser, TOKEN_LET)) {
+            Token name = parser.current;
+            advance(&parser); // nome da variável
+
+            match(&parser, TOKEN_COLON);
+            advance(&parser); // tipo
+
+            match(&parser, TOKEN_ASSIGN);
+            Expr *value = parse_expression(&parser);
+
+            Stmt *stmt = malloc(sizeof(Stmt));
+            stmt->type = STMT_LET;
+            stmt->let.name = name.lexeme;
+            stmt->let.value = value;
+
+            if (list.count >= list.capacity) {
+                list.capacity = list.capacity < 8 ? 8 : list.capacity * 2;
+                list.statements = realloc(list.statements, list.capacity * sizeof(Stmt *));
+            }
+            list.statements[list.count++] = stmt;
+        } else {
+            printf("[ERRO] Esperado 'let'\n");
+            exit(1);
+        }
     }
 
-    return NULL;
+    return list;
 }

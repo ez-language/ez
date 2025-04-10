@@ -1,24 +1,24 @@
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include "environment.h"
 
-void init_environment(Environment *env) {
-    env->count = 0;
-}
-
-void define_variable(Environment *env, const char *name, const char *value) {
-    if (env->count < 100) {
-        env->variables[env->count].name = strdup(name);
-        env->variables[env->count].value = strdup(value);
-        env->count++;
+void env_define(Environment *env, const char *name, Value value) {
+    if (env->count >= MAX_VARIABLES) {
+        printf("[ERRO] Limite de variáveis atingido\n");
+        exit(1);
     }
+    env->names[env->count] = strdup(name);
+    env->values[env->count] = value;
+    env->count++;
 }
 
-const char* get_variable(Environment *env, const char *name) {
+Value env_get(Environment *env, const char *name) {
     for (int i = 0; i < env->count; i++) {
-        if (strcmp(env->variables[i].name, name) == 0) {
-            return env->variables[i].value;
+        if (strcmp(env->names[i], name) == 0) {
+            return env->values[i];
         }
     }
-    return NULL;
+    printf("[ERRO] Variável não definida: %s\n", name);
+    exit(1);
 }
