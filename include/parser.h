@@ -10,12 +10,7 @@ typedef struct {
     Token previous;
 } Parser;
 
-typedef struct {
-    Stmt **statements;
-    size_t count;
-    size_t capacity;
-} StmtList;
-
+Token consume(Parser* parser, TokenType type, const char* message);
 StmtList parse(Lexer *lexer);
 
 #endif

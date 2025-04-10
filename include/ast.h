@@ -4,10 +4,19 @@
 #include <stdlib.h>
 #include "lexer.h"
 
+typedef struct Stmt Stmt;
+
+typedef struct {
+    Stmt** statements;
+    size_t count;
+    size_t capacity;
+} StmtList;
+
 typedef enum {
     EXPR_LITERAL,
     EXPR_BINARY,
-    EXPR_VARIABLE
+    EXPR_VARIABLE,
+    EXPR_PRINT,
 } ExprType;
 
 typedef enum {
@@ -15,7 +24,10 @@ typedef enum {
     LITERAL_STRING
 } LiteralType;
 
-typedef struct Expr {
+// ast.h
+typedef struct Expr Expr;  // Declaração do tipo Expr
+
+struct Expr {
     ExprType type;
     union {
         struct {
@@ -30,8 +42,11 @@ typedef struct Expr {
         struct {
             const char *name;
         } variable;
+        struct {
+            Expr* expression;
+        } print;
     };
-} Expr;
+};
 
 typedef enum {
     STMT_LET,

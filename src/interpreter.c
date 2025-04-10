@@ -27,6 +27,10 @@ Value eval_expr(Expr* expr) {
             }
         case EXPR_VARIABLE:
             return env_get(&global_env, expr->variable.name);
+        case EXPR_PRINT:
+            Value result = eval_expr(expr->print.expression);
+            print_value(result);  // Imprime o valor
+            return result;
         case EXPR_BINARY: {
             Value left = eval_expr(expr->binary.left);
             Value right = eval_expr(expr->binary.right);
@@ -86,7 +90,6 @@ void exec_stmt(Stmt* stmt) {
 
             break;
         }
-
         case STMT_PRINT: {
             Value result = eval_expr(stmt->print.expression);
             print_value(result);

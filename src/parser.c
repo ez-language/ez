@@ -17,6 +17,20 @@ static int match(Parser *parser, TokenType type) {
     return 0;
 }
 
+Token consume(Parser* parser, TokenType type, const char* message) {
+    Token token = parser->current;
+
+    if (parser->current.type == type) {
+        advance(parser);
+        return token;
+    }
+
+    printf("Token consumido: %s\n", token.lexeme);
+
+    printf("[ERRO] %s\n", message);
+    exit(1);
+}
+
 static Expr* parse_primary(Parser* parser) {
     Expr* expr = malloc(sizeof(Expr));
 
@@ -34,9 +48,7 @@ static Expr* parse_primary(Parser* parser) {
             break;
 
         case TOKEN_PRINT:
-            Stmt* stmt = malloc(sizeof(Stmt));
-            stmt->type = STMT_PRINT;
-            stmt->print.expression = expr;
+            expr->type = EXPR_PRINT;
             break;
 
         case TOKEN_IDENTIFIER:
@@ -58,12 +70,16 @@ static Expr* parse_expression(Parser *parser) {
 }
 
 static Stmt* parse_print_stmt(Parser* parser) {
-    advance(parser); // consumir o 'print'
+    advance(parser);
+
+    consume(parser, TOKEN_LPAREN, "Esperado '(' após 'print'.");
     Expr* expression = parse_expression(parser);
+    consume(parser, TOKEN_RPAREN, "Esperado ')' após expressão do 'print'.");
 
     Stmt* stmt = malloc(sizeof(Stmt));
     stmt->type = STMT_PRINT;
     stmt->print.expression = expression;
+    
     return stmt;
 }
 
@@ -102,6 +118,7 @@ StmtList parse(Lexer *lexer) {
                 list.capacity = list.capacity < 8 ? 8 : list.capacity * 2;
                 list.statements = realloc(list.statements, list.capacity * sizeof(Stmt *));
             }
+
             list.statements[list.count++] = stmt;
         } else {
             printf("[ERRO] Esperado 'let' ou 'print'\n");
