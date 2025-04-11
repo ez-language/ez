@@ -118,12 +118,13 @@ while (count < 5) {
 
 ```ez
 switch (option):
+  case 0:
+    print('Default option')
+    fallthrough
   case 1:
     print('Option 1')
-    break
   case 2:
     print('Option 2')
-    break
   default:
     print('Invalid option')
 ```
