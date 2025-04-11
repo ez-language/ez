@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "environment.h"
 
 void env_define(Environment *env, const char *name, Value value) {

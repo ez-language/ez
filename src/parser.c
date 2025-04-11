@@ -1,8 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+
 #include "parser.h"
-#include "token.h"
-#include "ast.h"
 
 static void advance(Parser *parser) {
     parser->previous = parser->current;

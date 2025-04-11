@@ -4,9 +4,7 @@
 #include <stdbool.h>
 
 #include "interpreter.h"
-#include "lexer.h"
 #include "environment.h"
-#include "ast.h"
 
 Environment global_env = {0};
 

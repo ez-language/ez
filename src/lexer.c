@@ -1,9 +1,10 @@
-#include "lexer.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdbool.h>
+
+#include "lexer.h"
 
 Lexer lexer_init(const char *source) {
     Lexer lexer;

@@ -1,5 +1,6 @@
-#include "ast.h"
 #include <stdio.h>
+
+#include "ast.h"
 
 void print_expr(Expr *expr) {
     if (expr->type == EXPR_LITERAL) {
