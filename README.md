@@ -132,35 +132,35 @@ switch (option):
 
 ## 🧮 Operators
 
-| Operator | Description          |
-| -------- | -------------------- |
-| `+`      | Addition or concat   |
-| `-`      | Subtraction          |
-| `*`      | Multiplication       |
-| `/`      | Division             |
-| `==`     | Equality             |
-| `!=`     | Inequality           |
-| `and`    | Logical AND          |
-| `or`     | Logical OR           |
-| `not`    | Logical NOT          |
+| Operator | Description        |
+| -------- | ------------------ |
+| `+`      | Addition or concat |
+| `-`      | Subtraction        |
+| `*`      | Multiplication     |
+| `/`      | Division           |
+| `==`     | Equality           |
+| `!=`     | Inequality         |
+| `and`    | Logical AND        |
+| `or`     | Logical OR         |
+| `not`    | Logical NOT        |
 
 ---
 
 ## 🔤 String Methods
 
-| Method                 | Description                                 | Example                              |
-| ---------------------- | ------------------------------------------- | ------------------------------------ |
-| `str.trim()`           | Removes whitespace from start and end       | `"  hi  ".trim() → "hi"`             |
-| `str.upper()`          | Converts to uppercase                       | `"hello".upper() → "HELLO"`          |
-| `str.lower()`          | Converts to lowercase                       | `"HELLO".lower() → "hello"`          |
-| `str.isSpace()`        | Checks if only spaces                      | `"   ".isSpace() → true`             |
-| `str.isNumeric()`      | Checks if numeric only                     | `"123".isNumeric() → true`           |
-| `str.isAlpha()`        | Checks if alphabetic only                  | `"abc".isAlpha() → true`             |
-| `str.isAlphaNumeric()` | Checks if alphanumeric                     | `"abc123".isAlphaNumeric() → true`   |
-| `str.isUpper()`        | Checks if all uppercase                    | `"ABC".isUpper() → true`             |
-| `str.isLower()`        | Checks if all lowercase                    | `"abc".isLower() → true`             |
-| `str.isTitle()`        | Checks if title case                      | `"Hello World".isTitle() → true`     |
-| `str.split(sep)`       | Splits by separator                        | `"a b".split(" ") → ["a", "b"]`     |
+| Method                 | Description                           | Example                            |
+| ---------------------- | ------------------------------------- | ---------------------------------- |
+| `str.trim()`           | Removes whitespace from start and end | `"  hi  ".trim() → "hi"`           |
+| `str.upper()`          | Converts to uppercase                 | `"hello".upper() → "HELLO"`        |
+| `str.lower()`          | Converts to lowercase                 | `"HELLO".lower() → "hello"`        |
+| `str.isSpace()`        | Checks if only spaces                 | `"   ".isSpace() → true`           |
+| `str.isNumeric()`      | Checks if numeric only                | `"123".isNumeric() → true`         |
+| `str.isAlpha()`        | Checks if alphabetic only             | `"abc".isAlpha() → true`           |
+| `str.isAlphaNumeric()` | Checks if alphanumeric                | `"abc123".isAlphaNumeric() → true` |
+| `str.isUpper()`        | Checks if all uppercase               | `"ABC".isUpper() → true`           |
+| `str.isLower()`        | Checks if all lowercase               | `"abc".isLower() → true`           |
+| `str.isTitle()`        | Checks if title case                  | `"Hello World".isTitle() → true`   |
+| `str.split(sep)`       | Splits by separator                   | `"a b".split(" ") → ["a", "b"]`    |
 
 ---
 
@@ -195,7 +195,12 @@ numbers: int[] = [1, 2, 3]
 matrix: int[][] = [[1, 2], [3, 4]]
 
 // Dictionary
-person: dict = {
+type DictType = {
+  name: string
+  age: int
+}
+
+person: DictType = {
   name: 'John',
   age: 20
 }
@@ -272,4 +277,3 @@ This language is still under development and new features are being planned. Her
 ### 🤝 Contributions
 
 We welcome ideas, suggestions, and contributions! If you enjoy programming languages, compilers, and fun syntax discussions, you're more than welcome. Open an issue, share your thoughts, or submit a PR.
-
