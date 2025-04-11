@@ -195,12 +195,12 @@ numbers: int[] = [1, 2, 3]
 matrix: int[][] = [[1, 2], [3, 4]]
 
 // Dictionary
-type DictType = {
+type Person = {
   name: string
   age: int
 }
 
-person: DictType = {
+person: Person = {
   name: 'John',
   age: 20
 }
