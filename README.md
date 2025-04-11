@@ -117,7 +117,7 @@ while (count < 5) {
 ### Switch-case
 
 ```ez
-switch (option):
+switch (option) {
   case 0:
     print('Default option')
     fallthrough
@@ -127,6 +127,7 @@ switch (option):
     print('Option 2')
   default:
     print('Invalid option')
+}
 ```
 
 ---
