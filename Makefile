@@ -1,13 +1,12 @@
 CC = gcc
-CFLAGS = -Wall -Iinclude
-
-SRC = src/main.c src/lexer.c src/token.c src/ast.c src/environment.c src/interpreter.c src/parser.c
-OUT = ez
+CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+SRC = $(wildcard src/*.c)
+OUT = ez.exe
 
 all: $(OUT)
 
 $(OUT): $(SRC)
-	$(CC) $(CFLAGS) -o $(OUT) $(SRC)
+	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
 	rm -f $(OUT)
