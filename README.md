@@ -251,7 +251,7 @@ if (firstName != lastName) {
 print(`Hello, ${shortName}`)
 ```
 
-📌 `.split(" ")` splits by spaces and `.length()` returns the number of items in the list.
+📌 `.split(' ')` splits by spaces and `.length()` returns the number of items in the list.
 
 ---
 
