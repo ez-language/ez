@@ -58,6 +58,7 @@
 ## Variable Declaration
 
 ```ez
+const pi: float = 3.14
 name: string = 'Maria'
 age: int = 23
 isStudent: boolean = true
@@ -102,6 +103,34 @@ for i in range(0, 10) {
 for i in range(10) {
   print(i)
 }
+
+// Looping through a list of values
+fruits: string[] = ["apple", "banana", "cherry"]
+
+for fruit in fruits {
+  print(fruit)
+}
+
+// Looping through a dictionary (Map)
+type Person = {
+  name: string
+  age: int
+}
+
+person: Person = {
+  name: 'John',
+  age: 20
+}
+
+for key in person {
+  print(`${key}: ${person[key]}`)
+}
+
+// or (preferred)
+
+for key, value in person {
+  print(`${key}: ${value}`)
+}
 ```
 
 ### `while` Loop
@@ -134,6 +163,8 @@ switch (option) {
 
 ## 🧮 Operators
 
+### Arithmetic Operators
+
 | Operator | Description                      |
 | -------- | -------------------------------- |
 | `+`      | Addition or concat               |
@@ -143,33 +174,66 @@ switch (option) {
 | `//`     | Integer Division (floor division)|
 | `**`     | Exponentiation                   |
 | `%`      | Modulus (remainder)              |
-| `==`     | Equality                         |
-| `!=`     | Inequality                       |
-| `>`      | Greater than                     |
-| `<`      | Less than                        |
-| `>=`     | Greater than or equal            |
-| `<=`     | Less than or equal               |
+
+### Comparison Operators
+
+| Operator | Description                                                |
+| -------- | ---------------------------------------------------------- |
+| `==`     | Equality                                                   |
+| `!=`     | Inequality                                                 |
+| `>`      | Greater than                                               |
+| `<`      | Less than                                                  |
+| `>=`     | Greater than or equal                                      |
+| `<=`     | Less than or equal                                         |
+| `is`     | Identity comparison                                        |
+| `in`     | Membership check (checks if an element is in a collection) |
+
+### Logical Operators
+
+| Operator | Description                      |
+| -------- | -------------------------------- |
 | `and`    | Logical AND                      |
 | `or`     | Logical OR                       |
 | `not`    | Logical NOT                      |
+
+### Assignment Operators
+
+| Operator | Description                                |
+| -------- | ------------------------------------------ |
+| `=`      | Assignment (assigns a value to a variable) |
+| `+=`     | Add and assign                             |
+| `-=`     | Subtract and assign                        |
+| `*=`     | Multiply and assign                        |
+| `/=`     | Divide and assign                          |
+| `//=`    | Integer Divide and assign                  |
+| `**=`    | Exponentiate and assign                    |
+| `%=`     | Modulus and assign                         |
+
+### String Operators
+
+| Operator | Description                                  |
+| -------- | -------------------------------------------- |
+| `+`      | Concatenation (joins strings)                |
+| `*`      | Repetition (repeats a string multiple times) |
 
 ---
 
 ## 🔤 String Methods
 
-| Method                 | Description                           | Example                            |
-| ---------------------- | ------------------------------------- | ---------------------------------- |
-| `str.trim()`           | Removes whitespace from start and end | `"  hi  ".trim() → "hi"`           |
-| `str.upper()`          | Converts to uppercase                 | `"hello".upper() → "HELLO"`        |
-| `str.lower()`          | Converts to lowercase                 | `"HELLO".lower() → "hello"`        |
-| `str.isSpace()`        | Checks if only spaces                 | `"   ".isSpace() → true`           |
-| `str.isNumeric()`      | Checks if numeric only                | `"123".isNumeric() → true`         |
-| `str.isAlpha()`        | Checks if alphabetic only             | `"abc".isAlpha() → true`           |
-| `str.isAlphaNumeric()` | Checks if alphanumeric                | `"abc123".isAlphaNumeric() → true` |
-| `str.isUpper()`        | Checks if all uppercase               | `"ABC".isUpper() → true`           |
-| `str.isLower()`        | Checks if all lowercase               | `"abc".isLower() → true`           |
-| `str.isTitle()`        | Checks if title case                  | `"Hello World".isTitle() → true`   |
-| `str.split(sep)`       | Splits by separator                   | `"a b".split(" ") → ["a", "b"]`    |
+| Method                 | Description                             | Example                                |
+| ---------------------- | --------------------------------------- | -------------------------------------- |
+| `str.trim()`           | Removes whitespace from start and end   | `"  hi  ".trim() → "hi"`               |
+| `str.upper()`          | Converts to uppercase                   | `"hello".upper() → "HELLO"`            |
+| `str.lower()`          | Converts to lowercase                   | `"HELLO".lower() → "hello"`            |
+| `str.isSpace()`        | Checks if only spaces                   | `"   ".isSpace() → true`               |
+| `str.isNumeric()`      | Checks if numeric only                  | `"123".isNumeric() → true`             |
+| `str.isAlpha()`        | Checks if alphabetic only               | `"abc".isAlpha() → true`               |
+| `str.isAlphaNumeric()` | Checks if alphanumeric                  | `"abc123".isAlphaNumeric() → true`     |
+| `str.isUpper()`        | Checks if all uppercase                 | `"ABC".isUpper() → true`               |
+| `str.isLower()`        | Checks if all lowercase                 | `"abc".isLower() → true`               |
+| `str.isTitle()`        | Checks if title case                    | `"Hello World".isTitle() → true`       |
+| `str.split(sep)`       | Splits by separator                     | `"a b".split(" ") → ["a", "b"]`        |
+| `str.replace(old, new)`| Replaces occurrences of `old` with `new`| `"hello".replace("hello", "hi") → "hi"`|
 
 ---
 
@@ -179,6 +243,16 @@ switch (option) {
 function sum(a: int, b: int): int {
   return a + b
 }
+
+print(sum(2, 2)) // 4
+
+// Anonymous function (example of inline usage)
+
+const double = (x: int): int => {
+  return x * 2
+}
+
+print(double(10)) // 20
 ```
 
 ---
@@ -214,6 +288,37 @@ person: Person = {
   age: 20
 }
 ```
+
+---
+
+## Modules and Imports
+
+`ez` supports code modularization. Modules allow you to organize your code in separate files, and you can import functions and variables as needed.
+
+### Module Structure:
+
+```ez
+// file: math.ez
+function add(a: int, b: int): int {
+  return a + b
+}
+
+function subtract(a: int, b: int): int {
+  return a - b
+}
+```
+
+### Using Modules:
+
+```ez
+// file: main.ez
+import math from "math.ez"
+
+result: int = math.add(5, 10)
+print(result)  // 15
+```
+
+In the example above, we're importing the `math` module that contains the functions `add` and `subtract`, which we can call in the main code.
 
 ---
 
