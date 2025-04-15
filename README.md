@@ -59,19 +59,19 @@ The `ez` language provides two main variable types that control mutability and s
 
 **Example**:
 ```ez
-globalVar = 1  // Global variable
+globalVar = 1 // Global variable
 
 function test() {
-    var localVar = 2  // Local variable
+    var localVar = 2 // Local variable
 
-    print(globalVar)   // 1 (accesses the global variable)
-    print(localVar)    // 2 (accesses the local variable within the function)
+    print(globalVar) // 1 (accesses the global variable)
+    print(localVar) // 2 (accesses the local variable within the function)
 }
 
 test()
 
-print(globalVar)  // 1 (global variable accessible outside the function)
-print(localVar)   // Error! 'localVar' is not accessible outside the function
+print(globalVar) // 1 (global variable accessible outside the function)
+print(localVar) // Error! 'localVar' is not accessible outside the function
 ```
 
 ### `const`
@@ -82,7 +82,7 @@ print(localVar)   // Error! 'localVar' is not accessible outside the function
 **Example**:
 ```ez
 const pi = 3.14159
-pi = 3.14  // Error! Cannot modify a 'const' value
+pi = 3.14 // Error! Cannot modify a 'const' value
 ```
 
 ---
@@ -355,7 +355,7 @@ function subtract(a: int, b: int): int {
 import math from "math.ez"
 
 result: int = math.add(5, 10)
-print(result)  // 15
+print(result) // 15
 ```
 
 In the example above, we're importing the `math` module that contains the functions `add` and `subtract`, which we can call in the main code.
