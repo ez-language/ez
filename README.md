@@ -89,7 +89,7 @@ print(localVar) // Error! 'localVar' is not accessible outside the function
 
 -   **Mutability**: Immutable
 -   **Scope**: Global or Local (like var)
--   **Description**: The const type is used to create variables that cannot be changed after their initial assignment. Attempting to modify a const variable will result in an error. Its scope depends on where it's declared — global or local.
+-   **Description**: The `const` type is used to create variables that cannot be changed after their initial assignment. Attempting to modify a `const` variable will result in an error. Its scope depends on where it's declared — global or local.
 
 **Example**:
 
