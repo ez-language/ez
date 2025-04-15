@@ -11,7 +11,7 @@
 -   [💡 Philosophy](#-philosophy)
 -   [✅ Primitive Types](#-primitive-types)
 -   [📖 Variable Types](#-variable-types)
--   [🧱 Custom Types](#custom-types)
+-   [🧱 Custom Types](#-custom-types)
 -   [📎 Conventions](#-conventions)
 -   [Variable Declaration](#-variable-declaration)
 -   [🧠 Comments](#-comments)
@@ -30,7 +30,8 @@
 
 ---
 
-💡 Philosophy
+## 💡 Philosophy
+
 The ez programming language is built on the following principles:
 
 -   **Clarity over cleverness**: Code should be easy to read and understand
