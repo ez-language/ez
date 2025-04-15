@@ -6,10 +6,12 @@
 
 ---
 
-## 📖 Table of Contents
+## 🧭 Table of Contents
 
--   [✨ Why use it?](#-why-use-it)
+-   [💡 Philosophy](#-philosophy)
 -   [✅ Primitive Types](#-primitive-types)
+-   [📖 Variable Types](#-variable-types)
+-   [🧱 Custom Types](#custom-types)
 -   [📎 Conventions](#-conventions)
 -   [Variable Declaration](#-variable-declaration)
 -   [🧠 Comments](#-comments)
@@ -19,6 +21,7 @@
 -   [🧰 Functions](#-functions)
 -   [🔍 String Interpolation](#-string-interpolation)
 -   [📚 Data Structures](#-data-structures)
+-   [Modules and Imports](#-modules-and-imports)
 -   [🧪 Usage Examples](#-usage-examples)
 -   [🚧 Language Roadmap](#-language-roadmap)
 -   [🔮 Planned Features](#-planned-features)
@@ -27,13 +30,19 @@
 
 ---
 
-## ✨ Why use it?
+💡 Philosophy
+The ez programming language is built on the following principles:
 
--   **Strong and static typing**
--   Clean and familiar syntax
--   Written in C, focused on **readability and performance**
--   Great for learning about language construction
--   Growing project and **open to contributions**
+-   **Clarity over cleverness**: Code should be easy to read and understand
+-   **Strong, static typing**: For safety and predictability
+-   **Productivity-focused**: Clean syntax, modern features, low friction
+-   **Balance between performance and simplicity**
+-   **Beginner-friendly**: Especially for those coming from Python, TypeScript, or JavaScript
+-   **Built-in utilities**: String methods, modern data structures, planned async/await support, and more
+
+The goal is to make programming in ez natural, expressive, and joyful — whether you're a beginner or an experienced developer
+
+---
 
 ## ✅ Primitive Types
 
@@ -48,16 +57,18 @@
 
 ---
 
-## Variable Types
+## 📖 Variable Types
 
 The `ez` language provides two main variable types that control mutability and scope:
 
 ### `var`
-- **Mutability**: Mutable
-- **Scope**: Global (by default)
-- **Description**: The `var` type is the default in `ez`. You don't need to specify it explicitly — any variable not declared with `const` is considered a `var`. `var` variables can be changed at any time. Their scope is global by default, unless declared inside a function, in which case they become local to that function.
+
+-   **Mutability**: Mutable
+-   **Scope**: Global (by default)
+-   **Description**: The `var` type is the default in `ez`. You don't need to specify it explicitly — any variable not declared with `const` is considered a `var`. `var` variables can be changed at any time. Their scope is global by default, unless declared inside a function, in which case they become local to that function.
 
 **Example**:
+
 ```ez
 globalVar = 1 // Global variable
 
@@ -75,14 +86,62 @@ print(localVar) // Error! 'localVar' is not accessible outside the function
 ```
 
 ### `const`
-- **Mutability**: Immutable
-- **Scope**: Global or Local (like var)
-- **Description**: The const type is used to create variables that cannot be changed after their initial assignment. Attempting to modify a const variable will result in an error. Its scope depends on where it's declared — global or local.
+
+-   **Mutability**: Immutable
+-   **Scope**: Global or Local (like var)
+-   **Description**: The const type is used to create variables that cannot be changed after their initial assignment. Attempting to modify a const variable will result in an error. Its scope depends on where it's declared — global or local.
 
 **Example**:
+
 ```ez
 const pi = 3.14159
 pi = 3.14 // Error! Cannot modify a 'const' value
+```
+
+The `const` keyword defines an immutable variable — it cannot be reassigned.
+However, if the constant is a reference type (such as an object or array), its internal contents can be mutated:
+
+```ez
+type Person = {
+  name: string
+  age: int
+}
+
+const person: Person = {
+  name: "Ana",
+  age: 30
+}
+
+person.age = 31 // Change the value of person age
+person = {} // Error! Cannot modify a 'const' value
+```
+
+---
+
+## 🧱 Custom Types
+
+You can define your own types using the type keyword. This makes it easier to organize and reuse complex structures:
+
+```ez
+type Person = {
+  name: string
+  age: int
+  hobbies: string[]
+}
+
+person: Person = {
+  name: "Lucas"
+  age: 25
+  hobbies: ["coding", "music"]
+}
+```
+
+You can also use custom types in functions for type checking:
+
+```ez
+function greeting(person: Person): string {
+  print(`Hello, ${person.name}!`)
+}
 ```
 
 ---
@@ -204,15 +263,15 @@ switch (option) {
 
 ### Arithmetic Operators
 
-| Operator | Description                      |
-| -------- | -------------------------------- |
-| `+`      | Addition or concat               |
-| `-`      | Subtraction                      |
-| `*`      | Multiplication                   |
-| `/`      | Division (floating-point)        |
-| `//`     | Integer Division (floor division)|
-| `**`     | Exponentiation                   |
-| `%`      | Modulus (remainder)              |
+| Operator | Description                       |
+| -------- | --------------------------------- |
+| `+`      | Addition or concat                |
+| `-`      | Subtraction                       |
+| `*`      | Multiplication                    |
+| `/`      | Division (floating-point)         |
+| `//`     | Integer Division (floor division) |
+| `**`     | Exponentiation                    |
+| `%`      | Modulus (remainder)               |
 
 ### Comparison Operators
 
@@ -229,11 +288,11 @@ switch (option) {
 
 ### Logical Operators
 
-| Operator | Description                      |
-| -------- | -------------------------------- |
-| `and`    | Logical AND                      |
-| `or`     | Logical OR                       |
-| `not`    | Logical NOT                      |
+| Operator | Description |
+| -------- | ----------- |
+| `and`    | Logical AND |
+| `or`     | Logical OR  |
+| `not`    | Logical NOT |
 
 ### Assignment Operators
 
@@ -259,20 +318,20 @@ switch (option) {
 
 ## 🔤 String Methods
 
-| Method                 | Description                             | Example                                |
-| ---------------------- | --------------------------------------- | -------------------------------------- |
-| `str.trim()`           | Removes whitespace from start and end   | `"  hi  ".trim() → "hi"`               |
-| `str.upper()`          | Converts to uppercase                   | `"hello".upper() → "HELLO"`            |
-| `str.lower()`          | Converts to lowercase                   | `"HELLO".lower() → "hello"`            |
-| `str.isSpace()`        | Checks if only spaces                   | `"   ".isSpace() → true`               |
-| `str.isNumeric()`      | Checks if numeric only                  | `"123".isNumeric() → true`             |
-| `str.isAlpha()`        | Checks if alphabetic only               | `"abc".isAlpha() → true`               |
-| `str.isAlphaNumeric()` | Checks if alphanumeric                  | `"abc123".isAlphaNumeric() → true`     |
-| `str.isUpper()`        | Checks if all uppercase                 | `"ABC".isUpper() → true`               |
-| `str.isLower()`        | Checks if all lowercase                 | `"abc".isLower() → true`               |
-| `str.isTitle()`        | Checks if title case                    | `"Hello World".isTitle() → true`       |
-| `str.split(sep)`       | Splits by separator                     | `"a b".split(" ") → ["a", "b"]`        |
-| `str.replace(old, new)`| Replaces occurrences of `old` with `new`| `"hello".replace("hello", "hi") → "hi"`|
+| Method                  | Description                              | Example                                 |
+| ----------------------- | ---------------------------------------- | --------------------------------------- |
+| `str.trim()`            | Removes whitespace from start and end    | `"  hi  ".trim() → "hi"`                |
+| `str.upper()`           | Converts to uppercase                    | `"hello".upper() → "HELLO"`             |
+| `str.lower()`           | Converts to lowercase                    | `"HELLO".lower() → "hello"`             |
+| `str.isSpace()`         | Checks if only spaces                    | `"   ".isSpace() → true`                |
+| `str.isNumeric()`       | Checks if numeric only                   | `"123".isNumeric() → true`              |
+| `str.isAlpha()`         | Checks if alphabetic only                | `"abc".isAlpha() → true`                |
+| `str.isAlphaNumeric()`  | Checks if alphanumeric                   | `"abc123".isAlphaNumeric() → true`      |
+| `str.isUpper()`         | Checks if all uppercase                  | `"ABC".isUpper() → true`                |
+| `str.isLower()`         | Checks if all lowercase                  | `"abc".isLower() → true`                |
+| `str.isTitle()`         | Checks if title case                     | `"Hello World".isTitle() → true`        |
+| `str.split(sep)`        | Splits by separator                      | `"a b".split(" ") → ["a", "b"]`         |
+| `str.replace(old, new)` | Replaces occurrences of `old` with `new` | `"hello".replace("hello", "hi") → "hi"` |
 
 ---
 
