@@ -110,7 +110,7 @@ type Person = {
 }
 
 const person: Person = {
-  name: "Ana",
+  name: 'Ana',
   age: 30
 }
 
@@ -132,9 +132,9 @@ type Person = {
 }
 
 person: Person = {
-  name: "Lucas"
+  name: 'Lucas'
   age: 25
-  hobbies: ["coding", "music"]
+  hobbies: ['coding', 'music']
 }
 ```
 
@@ -205,7 +205,7 @@ for i in range(10) {
 }
 
 // Looping through a list of values
-fruits: string[] = ["apple", "banana", "cherry"]
+fruits: string[] = ['apple', 'banana', 'cherry']
 
 for fruit in fruits {
   print(fruit)
@@ -345,18 +345,18 @@ Bitwise operators operate on the binary representations of integers.
 
 | Method                  | Description                              | Example                                 |
 | ----------------------- | ---------------------------------------- | --------------------------------------- |
-| `str.trim()`            | Removes whitespace from start and end    | `"  hi  ".trim() → "hi"`                |
-| `str.upper()`           | Converts to uppercase                    | `"hello".upper() → "HELLO"`             |
-| `str.lower()`           | Converts to lowercase                    | `"HELLO".lower() → "hello"`             |
-| `str.isSpace()`         | Checks if only spaces                    | `"   ".isSpace() → true`                |
-| `str.isNumeric()`       | Checks if numeric only                   | `"123".isNumeric() → true`              |
-| `str.isAlpha()`         | Checks if alphabetic only                | `"abc".isAlpha() → true`                |
-| `str.isAlphaNumeric()`  | Checks if alphanumeric                   | `"abc123".isAlphaNumeric() → true`      |
-| `str.isUpper()`         | Checks if all uppercase                  | `"ABC".isUpper() → true`                |
-| `str.isLower()`         | Checks if all lowercase                  | `"abc".isLower() → true`                |
-| `str.isTitle()`         | Checks if title case                     | `"Hello World".isTitle() → true`        |
-| `str.split(sep)`        | Splits by separator                      | `"a b".split(" ") → ["a", "b"]`         |
-| `str.replace(old, new)` | Replaces occurrences of `old` with `new` | `"hello".replace("hello", "hi") → "hi"` |
+| `str.trim()`            | Removes whitespace from start and end    | `'  hi  '.trim() → 'hi'`                |
+| `str.upper()`           | Converts to uppercase                    | `'hello'.upper() → 'HELLO'`             |
+| `str.lower()`           | Converts to lowercase                    | `'HELLO'.lower() → 'hello'`             |
+| `str.isSpace()`         | Checks if only spaces                    | `'   '.isSpace() → true`                |
+| `str.isNumeric()`       | Checks if numeric only                   | `'123'.isNumeric() → true`              |
+| `str.isAlpha()`         | Checks if alphabetic only                | `'abc'.isAlpha() → true`                |
+| `str.isAlphaNumeric()`  | Checks if alphanumeric                   | `'abc123'.isAlphaNumeric() → true`      |
+| `str.isUpper()`         | Checks if all uppercase                  | `'ABC'.isUpper() → true`                |
+| `str.isLower()`         | Checks if all lowercase                  | `'abc'.isLower() → true`                |
+| `str.isTitle()`         | Checks if title case                     | `'Hello World'.isTitle() → true`        |
+| `str.split(sep)`        | Splits by separator                      | `'a b'.split(' ') → ['a', 'b']`         |
+| `str.replace(old, new)` | Replaces occurrences of `old` with `new` | `'hello'.replace('hello', 'hi') → 'hi'` |
 
 ---
 
@@ -436,7 +436,7 @@ function subtract(a: int, b: int): int {
 
 ```ez
 // file: main.ez
-import math from "math.ez"
+import math from 'math.ez'
 
 result: int = math.add(5, 10)
 print(result) // 15
