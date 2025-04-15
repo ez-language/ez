@@ -134,17 +134,24 @@ switch (option) {
 
 ## 🧮 Operators
 
-| Operator | Description        |
-| -------- | ------------------ |
-| `+`      | Addition or concat |
-| `-`      | Subtraction        |
-| `*`      | Multiplication     |
-| `/`      | Division           |
-| `==`     | Equality           |
-| `!=`     | Inequality         |
-| `and`    | Logical AND        |
-| `or`     | Logical OR         |
-| `not`    | Logical NOT        |
+| Operator | Description                      |
+| -------- | -------------------------------- |
+| `+`      | Addition or concat               |
+| `-`      | Subtraction                      |
+| `*`      | Multiplication                   |
+| `/`      | Division (floating-point)        |
+| `//`     | Integer Division (floor division)|
+| `**`     | Exponentiation                   |
+| `%`      | Modulus (remainder)              |
+| `==`     | Equality                         |
+| `!=`     | Inequality                       |
+| `>`      | Greater than                     |
+| `<`      | Less than                        |
+| `>=`     | Greater than or equal            |
+| `<=`     | Less than or equal               |
+| `and`    | Logical AND                      |
+| `or`     | Logical OR                       |
+| `not`    | Logical NOT                      |
 
 ---
 
