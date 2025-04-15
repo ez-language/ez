@@ -4,7 +4,7 @@
 typedef enum {
     TOKEN_UNKNOWN,
     TOKEN_EOF,
-    TOKEN_LET,
+    TOKEN_VAR,
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_FOR,

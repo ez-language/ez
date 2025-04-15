@@ -49,14 +49,14 @@ struct Expr {
 };
 
 typedef enum {
-    STMT_LET,
+    STMT_VAR,
     STMT_PRINT
 } StmtType;
 
 typedef struct {
     const char *name;
     Expr *value;
-} LetStmt;
+} VarStmt;
 
 typedef struct {
     Expr* expression;
@@ -65,7 +65,7 @@ typedef struct {
 typedef struct Stmt {
     StmtType type;
     union {
-        LetStmt let;
+        VarStmt var;
         PrintStmt print;
     };
 } Stmt;

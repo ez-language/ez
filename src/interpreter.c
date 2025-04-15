@@ -79,11 +79,11 @@ void print_value(Value value) {
 
 void exec_stmt(Stmt* stmt) {
     switch (stmt->type) {
-        case STMT_LET: {
-            Value value = eval_expr(stmt->let.value);
-            env_define(&global_env, stmt->let.name, value);
+        case STMT_VAR: {
+            Value value = eval_expr(stmt->var.value);
+            env_define(&global_env, stmt->var.name, value);
 
-            printf("[let] %s = ", stmt->let.name);
+            printf("[var] %s = ", stmt->var.name);
             print_value(value);
 
             break;

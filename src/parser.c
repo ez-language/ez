@@ -90,7 +90,7 @@ StmtList parse(Lexer *lexer) {
     StmtList list = {0};
 
     while (parser.current.type != TOKEN_EOF) {
-        if (match(&parser, TOKEN_LET)) {
+        if (match(&parser, TOKEN_VAR)) {
             Token name = parser.current;
             advance(&parser); // nome da variável
     
@@ -101,9 +101,9 @@ StmtList parse(Lexer *lexer) {
             Expr *value = parse_expression(&parser);
     
             Stmt *stmt = malloc(sizeof(Stmt));
-            stmt->type = STMT_LET;
-            stmt->let.name = name.lexeme;
-            stmt->let.value = value;
+            stmt->type = STMT_VAR;
+            stmt->var.name = name.lexeme;
+            stmt->var.value = value;
     
             if (list.count >= list.capacity) {
                 list.capacity = list.capacity < 8 ? 8 : list.capacity * 2;
@@ -120,7 +120,7 @@ StmtList parse(Lexer *lexer) {
 
             list.statements[list.count++] = stmt;
         } else {
-            printf("[ERRO] Esperado 'let' ou 'print'\n");
+            printf("[ERRO] Esperado 'var' ou 'print'\n");
             exit(1);
         }
     }    

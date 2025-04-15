@@ -72,7 +72,7 @@ TokenType check_keyword(const char* text) {
     if (strcmp(text, "and") == 0) return TOKEN_AND;
     if (strcmp(text, "or") == 0) return TOKEN_OR;
     if (strcmp(text, "not") == 0) return TOKEN_NOT;
-    if (strcmp(text, "let") == 0) return TOKEN_LET;
+    if (strcmp(text, "var") == 0) return TOKEN_VAR;
     if (strcmp(text, "if") == 0) return TOKEN_IF;
     if (strcmp(text, "else") == 0) return TOKEN_ELSE;
     if (strcmp(text, "for") == 0) return TOKEN_FOR;

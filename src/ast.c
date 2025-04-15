@@ -9,10 +9,10 @@ void print_expr(Expr *expr) {
 }
 
 void print_stmt(Stmt *stmt) {
-    if (stmt->type == STMT_LET) {
-        printf("LetStatement:\n");
-        printf("  Name: %s\n", stmt->let.name);
+    if (stmt->type == STMT_VAR) {
+        printf("VarStatement:\n");
+        printf("  Name: %s\n", stmt->var.name);
         printf("  Value:\n");
-        print_expr(stmt->let.value);
+        print_expr(stmt->var.value);
     }
 }
