@@ -48,6 +48,45 @@
 
 ---
 
+## Variable Types
+
+The `ez` language provides two main variable types that control mutability and scope:
+
+### `var`
+- **Mutability**: Mutable
+- **Scope**: Global (by default)
+- **Description**: The `var` type is the default in `ez`. You don't need to specify it explicitly — any variable not declared with `const` is considered a `var`. `var` variables can be changed at any time. Their scope is global by default, unless declared inside a function, in which case they become local to that function.
+
+**Example**:
+```ez
+global_var = 1  // Global variable
+
+function test() {
+  var local_var = 2  // Local variable
+
+  print(global_var)   // 1 (accesses the global variable)
+  print(local_var)    // 2 (accesses the local variable within the function)
+}
+
+test()
+
+print(global_var)  // 1 (global variable accessible outside the function)
+print(local_var)  // Error! 'local_var' is not accessible outside the function
+```
+
+### `const`
+- **Mutability**: Immutable
+- **Scope**: Global or Local (like var)
+- **Description**: The const type is used to create variables that cannot be changed after their initial assignment. Attempting to modify a const variable will result in an error. Its scope depends on where it's declared — global or local.
+
+**Example**:
+```ez
+const pi = 3.14159
+pi = 3.14  // Error! Cannot modify a 'const' value
+```
+
+---
+
 ## 📎 Conventions
 
 -   The language uses `camelCase` for variable and function names.
@@ -262,6 +301,7 @@ print(double(10)) // 20
 ```ez
 print(`Hello, ${name}!`)
 print(`${number:02d} x ${i:02d} = ${result:02d}`)
+print(`2 + 2 = ${2 + 2}`)
 ```
 
 📌 `:02d` formats numbers with two digits, padding with zero on the left.
@@ -328,7 +368,7 @@ In the example above, we're importing the `math` module that contains the functi
 
 ```ez
 function multiplicationTable(num: int): int[] {
-  let result: int[] = []
+  result: int[] = []
 
   for i in range(11) {
     result += num * i
