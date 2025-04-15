@@ -321,9 +321,9 @@ switch (option) {
 Bitwise operators operate on the binary representations of integers.
 
 | Operator | Description | Example (a = 5, b = 3) |
-| -------- | ----------- | ---------------------- | --- | ------ |
+| -------- | ----------- | ---------------------- |
 | `&`      | AND         | `a & b → 1`            |
-| `        | `           | OR                     | `a  | b → 7` |
+| `\|`     | OR          | `a \| b` → `7`         |
 | `^`      | XOR         | `a ^ b → 6`            |
 | `~`      | NOT         | `~a → -6`              |
 | `<<`     | Shift left  | `a << 1 → 10`          |
