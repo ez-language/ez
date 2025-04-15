@@ -42,6 +42,8 @@ The ez programming language is built on the following principles:
 
 The goal is to make programming in ez natural, expressive, and joyful — whether you're a beginner or an experienced developer
 
+⚡ Power when you need it, clarity when you read it — that's the ez philosophy.
+
 ---
 
 ## ✅ Primitive Types
@@ -313,6 +315,29 @@ switch (option) {
 | -------- | -------------------------------------------- |
 | `+`      | Concatenation (joins strings)                |
 | `*`      | Repetition (repeats a string multiple times) |
+
+### Bitwise Operators
+
+Bitwise operators operate on the binary representations of integers.
+
+| Operator | Description | Example (a = 5, b = 3) |
+| -------- | ----------- | ---------------------- | --- | ------ |
+| `&`      | AND         | `a & b → 1`            |
+| `        | `           | OR                     | `a  | b → 7` |
+| `^`      | XOR         | `a ^ b → 6`            |
+| `~`      | NOT         | `~a → -6`              |
+| `<<`     | Shift left  | `a << 1 → 10`          |
+| `>>`     | Shift right | `a >> 1 → 2`           |
+
+📌 Explanation:
+
+-   `a = 5` → `0101` (binary), `b = 3` → `0011` (binary)
+-   `a & b` → `0101 & 0011` = `0001` → `1`
+-   `a | b` → `0101 | 0011` = `0111` → `7`
+-   `a ^ b` → `0101 ^ 0011` = `0110` → `6`
+-   `~a` → bitwise NOT of `0101` = `1010` (in two's complement, this is `-6`)
+-   `a << 1` → shift `0101` one bit to the left = `1010` → `10`
+-   `a >> 1` → shift `0101` one bit to the right = `0010` → `2`
 
 ---
 
