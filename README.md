@@ -59,19 +59,19 @@ The `ez` language provides two main variable types that control mutability and s
 
 **Example**:
 ```ez
-global_var = 1  // Global variable
+globalVar = 1  // Global variable
 
 function test() {
-  var local_var = 2  // Local variable
+    var localVar = 2  // Local variable
 
-  print(global_var)   // 1 (accesses the global variable)
-  print(local_var)    // 2 (accesses the local variable within the function)
+    print(globalVar)   // 1 (accesses the global variable)
+    print(localVar)    // 2 (accesses the local variable within the function)
 }
 
 test()
 
-print(global_var)  // 1 (global variable accessible outside the function)
-print(local_var)  // Error! 'local_var' is not accessible outside the function
+print(globalVar)  // 1 (global variable accessible outside the function)
+print(localVar)   // Error! 'localVar' is not accessible outside the function
 ```
 
 ### `const`
