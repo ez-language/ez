@@ -347,7 +347,7 @@ Bitwise operators operate on the binary representations of integers.
 
 | Method                  | Description                                                     | Example                                 |
 | ----------------------- | --------------------------------------------------------------- | --------------------------------------- |
-| `str.length()`          | Returns the number of characters in a text or items in an array | `'abc'.length() → `3`                   |
+| `str.length()`          | Returns the number of characters in a text or items in an array | `'abc'.length() → 3`                    |
 | `str.trim()`            | Removes whitespace from start and end                           | `'  hi  '.trim() → 'hi'`                |
 | `str.upper()`           | Converts to uppercase                                           | `'hello'.upper() → 'HELLO'`             |
 | `str.lower()`           | Converts to lowercase                                           | `'HELLO'.lower() → 'hello'`             |
