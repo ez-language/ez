@@ -445,7 +445,7 @@ result: int = math.sum(5, 10)
 print(result) // 15
 ```
 
-In the example above, we're importing the `math` module that contains the functions `add` and `subtract`, which we can call in the main code.
+In the example above, we're importing the `math` module that contains the functions `sum` and `subtract`, which we can call in the main code.
 
 ---
 
