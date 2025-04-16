@@ -425,7 +425,7 @@ person: Person = {
 
 ```ez
 // file: math.ez
-function add(a: int, b: int): int {
+function sum(a: int, b: int): int {
   return a + b
 }
 
@@ -440,7 +440,8 @@ function subtract(a: int, b: int): int {
 // file: main.ez
 import math from 'math.ez'
 
-result: int = math.add(5, 10)
+result: int = math.sum(5, 10)
+
 print(result) // 15
 ```
 
