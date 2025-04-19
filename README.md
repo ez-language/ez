@@ -25,15 +25,14 @@ The goal is to provide a language that any developer can quickly learn and use c
 
 ## Documentation
 
-Access the documentation [here](doc/README.md)
+Access the documentation [here](doc/README.md).
 
 ---
 
 ## Roadmap
 
-For upcoming features and long-term goals, see the [roadmap](doc/roadmap.md)
+For upcoming features and long-term goals, see the [roadmap](doc/roadmap.md).
 
 ## Contributions
 
-We welcome ideas, suggestions, and contributions!
-See the [contributing guide](doc/contributing.md) for details.
+We welcome ideas, suggestions, and contributions! See the [contributing guide](doc/contributing.md) for details.
