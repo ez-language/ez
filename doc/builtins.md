@@ -9,7 +9,7 @@ name = input("What's your name?")
 -   `open()`: opens a file or resource.
 
 ```ez
-file = open(data.txt)
+file = open('data.txt')
 ```
 
 -   `print()`: displays values to the console.
