@@ -1,5 +1,7 @@
 # ez
 
+![Status](https://img.shields.io/badge/status-early%20stage-blueviolet)
+
 **ez** is a strongly and statically typed programming language designed to be simple, readable, and powerful.
 
 > Built for developers who want to move fast, without sacrificing safety or performance.
