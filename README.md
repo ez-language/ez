@@ -10,16 +10,16 @@
 
 ## Why ez?
 
-ez was created with the idea that a programming language can be simple and **readable** without sacrificing security and performance.
+ez was created with the belief that a programming language can be simple and **readable** without compromising security and performance.
 
 Key principles:
 
--   **Strong, static and clear typing**: Ensures fewer bugs and easier maintenance with a type system that guides developers.
+-   **Strong, static, and clear typing**: Ensures fewer bugs and easier maintenance with a type system that guides developers.
 -   **Consistent and readable syntax**: Makes code easier to write and understand, reducing cognitive load for developers.
 -   **Native execution with real performance**: Delivers fast, efficient execution without relying on an external runtime.
 -   **Built for production, not just experimentation**: Focuses on real-world use cases and stability.
 
-The focus is on provide a language that any developer can quickly learn and use confidently in real-world applications.
+The goal is to provide a language that any developer can quickly learn and use confidently in real-world applications.
 
 ---
 
@@ -36,4 +36,4 @@ For upcoming features and long-term goals, see the [roadmap](doc/roadmap.md)
 ## Contributions
 
 We welcome ideas, suggestions, and contributions!
-Refer to the [contributing guide](doc/contributing.md) for details.
+See the [contributing guide](doc/contributing.md) for details.
