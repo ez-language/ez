@@ -1,55 +1,49 @@
-# Datetime
+# datetime
 
-The `datetime` library provides utilities to get the current date and time, parse strings into dates, and format datetime objects.
+The `datetime` module provides utilities to work with current date and time, and to format or parse date strings.
 
-## Importing
+## Functions
 
-```ez
-import datetime
-```
+-   `now() -> string`  
+    Returns the current date and time as a formatted string (e.g., `2025-04-20 14:30:00`).
 
-## Methods
+    `now()` methods:
 
--   `datetime.now()`: returns an object representing the current date and time.
+    -   `year`: full year
+    -   `month`: month
+    -   `day`: day
+    -   `hour`: hour
+    -   `minute`: minutes
+    -   `second`: seconds
 
-```ez
-import datetime
+-   `today() -> string`  
+    Returns the current date as a string (e.g., `2025-04-20`).
 
-now = datetime.now()
+-   `format(timestamp: number, pattern: string) -> string`  
+    Converts a timestamp to a formatted date string based on a pattern.
 
-print(`Year: ${now.year}`)
-print(`Month: ${now.month}`)
-print(`Day: ${now.day}`)
-print(`Hour: ${now.hour}`)
-print(`Minute: ${now.minute}`)
-```
+    Format tokens can include:
 
--   `datetime.format(datetime: datetime, format: string)`: formats a datetime object into a string.
+    -   `yyyy`: full year
+    -   `mm`: month (01–12)
+    -   `dd`: day of the month (01–31)
+    -   `hh`: hour (00–23)
+    -   `min`: minutes (00–59)
+    -   `ss`: seconds (00–59)
 
-Format tokens can include:
+-   `parse(dateString: string, pattern: string) -> number`  
+    Parses a date string into a timestamp according to the given pattern.
 
--   `yyyy` — full year
--   `mm` — month (01–12)
--   `dd` — day of the month (01–31)
--   `hh` — hour (00–23)
--   `min` — minutes (00–59)
--   `ss` — seconds (00–59)
-
-```ez
-import datetime
-
-now = datetime.now()
-formatted = datetime.format(now, 'yyyy-mm-dd hh:min:ss')
-
-print(formatted) // e.g., 2025-04-19 14:35:02
-```
-
--   `datetime.parse(string: string)`: parses a string into a datetime object.
+## Example
 
 ```ez
 import datetime
 
-date = datetime.parse('2025-04-19 14:35:02')
+date = datetime.today()
 
-print(`Parsed hour: ${date.hour}`)
+print(date)
+
+timestamp = datetime.parse('2025-04-20', 'YYYY-MM-DD')
+
+print(datetime.format(timestamp, 'DD/MM/YYYY'))
 ```

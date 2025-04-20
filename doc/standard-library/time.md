@@ -1,16 +1,24 @@
-# Time
+# time
 
-The `time` library provides functions related to delays and time measurement.
+The `time` module provides functions to delay execution and measure elapsed time.
 
-## Importing
+## Functions
 
-```ez
-import time
-```
+-   `sleep(seconds: number) -> void`  
+    Pauses the execution for the specified number of seconds.
 
-## Methods
+-   `now() -> number`  
+    Returns the current time in seconds since the epoch. This value reflects the system clock and may change if the system time is adjusted.
 
--   `time.sleep(seconds: number)`: pauses the program for a given number of seconds.
+-   `monotonic() -> number`  
+    Returns a monotonically increasing time value, useful for measuring durations. This value is not affected by changes to the system clock.
+
+## Choosing Between `now()` and `monotonic()`
+
+Use `now()` when you need the current timestamp, such as logging the time of an event.  
+Use `monotonic()` when you need to measure elapsed time precisely, regardless of changes to the system clock.
+
+## Example
 
 ```ez
 import time
@@ -20,28 +28,10 @@ print('Waiting...')
 time.sleep(2)
 
 print('Done!')
-```
 
--   `time.now()`: returns the current timestamp in seconds since a fixed point in time (like the Unix epoch).
+start = time.monotonic()
+// Do something
+end = time.monotonic()
 
-```ez
-import time
-
-now = time.now()
-
-print(`Current time: ${now}`)
-```
-
--   `time.elapsed(start: number, end: number)`: calculates the time difference between two values.
-
-```ez
-import time
-
-start = time.now()
-
-time.sleep(1.5)
-
-end = time.now()
-
-print(time.elapsed(start, end)) // 1.5
+print(`Elapsed: ${end - start} seconds`)
 ```

@@ -1,6 +1,6 @@
 # Standard Library
 
-The **ez standard library** provides a collection of built-in modules to help you handle common tasks like working with time, files, and dates.
+The **ez standard library** provides a collection of built-in modules to help you handle common tasks. Click on a section to jump directly to its documentation.
 
 ## Modules
 
@@ -12,3 +12,12 @@ The **ez standard library** provides a collection of built-in modules to help yo
 
 -   [`datetime`](standard-library/datetime.md)  
     Get the current date and time, format and parse date strings.
+
+-   [`math`](standard-library/math.md)  
+    Perform basic mathematical operations and access constants like `pi`.
+
+-   [`http`](standard-library/http.md)  
+    Send HTTP requests such as GET, POST, PUT, and DELETE.
+
+-   [`json`](standard-library/json.md)  
+    Parse JSON strings and convert data to JSON format.
