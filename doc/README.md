@@ -17,3 +17,4 @@ Welcome to **ez Language Documentation**. Here you will find details about sinta
 -   [Functions](functions.md)
 -   [String Interpolation](string-interpolation.md)
 -   [Modules and Imports](modules-and-imports.md)
+-   [Standard Library](stdlib.md)
