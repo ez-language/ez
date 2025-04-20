@@ -11,7 +11,7 @@ This document outlines the planned features and milestones for the ez programmin
 -   [ ] Support built-in functions: `print()`, `input()`
 -   [ ] String interpolation
 -   [ ] Basic `for` loop with `range()`
--   [ ] Organize and write initial documentation
+-   [x] Organize and write initial documentation
 
 ---
 
