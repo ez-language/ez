@@ -9,9 +9,9 @@ The `file` module provides functionality for working with files.
 
     Modes:
 
-    -   `"r"`: read
-    -   `"w"`: write (overwrites existing content)
-    -   `"a"`: append
+    -   `'r'`: read
+    -   `'w'`: write (overwrites existing content)
+    -   `'a'`: append
 
 ## File Object Methods
 
