@@ -24,9 +24,9 @@ Token consume(Parser* parser, TokenType type, const char* message) {
         return token;
     }
 
-    printf("Token consumido: %s\n", token.lexeme);
+    printf("Consumed token: %s\n", token.lexeme);
 
-    printf("[ERRO] %s\n", message);
+    printf("[ERROR] %s\n", message);
     exit(1);
 }
 
@@ -36,18 +36,14 @@ static Expr* parse_primary(Parser* parser) {
     switch (parser->current.type) {
         case TOKEN_NUMBER:
             expr->type = EXPR_LITERAL;
-            expr->literal = parser->current.lexeme;  // lexeme, não literal
+            expr->literal = parser->current.lexeme;
             expr->literal_type = LITERAL_NUMBER;
             break;
 
         case TOKEN_STRING:
             expr->type = EXPR_LITERAL;
-            expr->literal = parser->current.lexeme;  // lexeme, não literal
+            expr->literal = parser->current.lexeme;
             expr->literal_type = LITERAL_STRING;
-            break;
-
-        case TOKEN_PRINT:
-            expr->type = EXPR_PRINT;
             break;
 
         case TOKEN_IDENTIFIER:
@@ -56,24 +52,45 @@ static Expr* parse_primary(Parser* parser) {
             break;
 
         default:
-            printf("[ERRO] Expressão primária inválida\n");
+            printf("[ERROR] Invalid primary expression\n");
             exit(1);
     }
 
     advance(parser);
+
+    if (match(parser, TOKEN_DOT)) {
+        Token method_name = consume(parser, TOKEN_IDENTIFIER, "Expected method name after '.'");
+
+        consume(parser, TOKEN_LPAREN, "Expected '(' after method name");
+
+        Expr** arguments = NULL;
+        int arg_count = 0;
+
+        consume(parser, TOKEN_RPAREN, "Expected ')' after method call");
+
+        Expr* call_expr = malloc(sizeof(Expr));
+        call_expr->type = EXPR_CALL_METHOD;
+        call_expr->call_method.receiver = expr;
+        call_expr->call_method.method_name = method_name.lexeme;
+        call_expr->call_method.arguments = arguments;
+        call_expr->call_method.arg_count = arg_count;
+
+        return call_expr;
+    }
+
     return expr;
 }
 
-static Expr* parse_expression(Parser *parser) {
+static Expr* parse_expression(Parser* parser) {
     return parse_primary(parser);
 }
 
 static Stmt* parse_print_stmt(Parser* parser) {
     advance(parser);
 
-    consume(parser, TOKEN_LPAREN, "Esperado '(' após 'print'.");
+    consume(parser, TOKEN_LPAREN, "Expected '(' after 'print'");
     Expr* expression = parse_expression(parser);
-    consume(parser, TOKEN_RPAREN, "Esperado ')' após expressão do 'print'.");
+    consume(parser, TOKEN_RPAREN, "Expected ')' after 'print' expression");
 
     Stmt* stmt = malloc(sizeof(Stmt));
     stmt->type = STMT_PRINT;
@@ -92,10 +109,10 @@ StmtList parse(Lexer *lexer) {
     while (parser.current.type != TOKEN_EOF) {
         if (match(&parser, TOKEN_VAR)) {
             Token name = parser.current;
-            advance(&parser); // nome da variável
+            advance(&parser);
     
             match(&parser, TOKEN_COLON);
-            advance(&parser); // tipo (ignorado por enquanto)
+            advance(&parser);
     
             match(&parser, TOKEN_ASSIGN);
             Expr *value = parse_expression(&parser);
@@ -120,7 +137,7 @@ StmtList parse(Lexer *lexer) {
 
             list.statements[list.count++] = stmt;
         } else {
-            printf("[ERRO] Esperado 'var' ou 'print'\n");
+            printf("[ERROR] Expected 'var' or 'print'\n");
             exit(1);
         }
     }    

@@ -6,7 +6,7 @@
 
 void env_define(Environment *env, const char *name, Value value) {
     if (env->count >= MAX_VARIABLES) {
-        printf("[ERRO] Limite de variáveis atingido\n");
+        printf("[ERROR] Variable limit reached\n");
         exit(1);
     }
     env->names[env->count] = strdup(name);
@@ -20,6 +20,6 @@ Value env_get(Environment *env, const char *name) {
             return env->values[i];
         }
     }
-    printf("[ERRO] Variável não definida: %s\n", name);
+    printf("[ERROR] Variable not defined: %s\n", name);
     exit(1);
 }

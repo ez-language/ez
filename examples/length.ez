@@ -1,0 +1,3 @@
+var text: string = "Hello, World!"
+
+print(text.length())

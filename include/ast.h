@@ -17,15 +17,23 @@ typedef enum {
     EXPR_BINARY,
     EXPR_VARIABLE,
     EXPR_PRINT,
+    EXPR_CALL_METHOD
 } ExprType;
+
+// Declarar o tipo Expr antes de usá-lo
+typedef struct Expr Expr;
+
+typedef struct {
+    Expr* receiver;
+    const char* method_name;
+    int arg_count;
+    Expr** arguments;
+} CallMethodExpr;
 
 typedef enum {
     LITERAL_NUMBER,
     LITERAL_STRING
 } LiteralType;
-
-// ast.h
-typedef struct Expr Expr;  // Declaração do tipo Expr
 
 struct Expr {
     ExprType type;
@@ -45,6 +53,7 @@ struct Expr {
         struct {
             Expr* expression;
         } print;
+        CallMethodExpr call_method;
     };
 };
 

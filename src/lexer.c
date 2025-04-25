@@ -143,8 +143,7 @@ Token lexer_next_token(Lexer *lexer) {
     if (c == '"') {
         if (lexer->source[lexer->position + 1] == '"' &&
             lexer->source[lexer->position + 2] == '"') {
-            // Multiline string
-            lexer->position += 3; // Skip opening triple quotes
+            lexer->position += 3;
             int start = lexer->position;
     
             while (!(current_char(lexer) == '"' &&
@@ -158,20 +157,19 @@ Token lexer_next_token(Lexer *lexer) {
             char *text = substring(lexer->source, start, end);
     
             if (current_char(lexer) != '\0') {
-                lexer->position += 3; // Skip closing triple quotes
+                lexer->position += 3;
             }
     
             return make_token(TOKEN_STRING, text);
         } else {
-            // Single-line string (já implementado)
             int start = lexer->position + 1;
-            advance(lexer); // skip opening quote
+            advance(lexer);
     
             while (current_char(lexer) != '"' && current_char(lexer) != '\0') {
                 if (current_char(lexer) == '\\') {
-                    advance(lexer); // skip backslash
+                    advance(lexer);
                     if (current_char(lexer) != '\0') {
-                        advance(lexer); // skip escaped char
+                        advance(lexer);
                     }
                 } else {
                     advance(lexer);
@@ -181,7 +179,7 @@ Token lexer_next_token(Lexer *lexer) {
             int end = lexer->position;
             char *text = substring(lexer->source, start, end);
     
-            if (current_char(lexer) == '"') advance(lexer); // skip closing quote
+            if (current_char(lexer) == '"') advance(lexer);
     
             return make_token(TOKEN_STRING, text);
         }
