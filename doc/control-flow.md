@@ -31,7 +31,7 @@ for i in range(0, 10) {
     print(i)
 }
 
-or simply
+// or simply
 
 for i in range(10) {
     print(i)
