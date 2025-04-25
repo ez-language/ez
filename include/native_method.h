@@ -1,6 +1,8 @@
 #ifndef NATIVE_METHOD_H
 #define NATIVE_METHOD_H
 
+#include <string.h>
+
 #include "value.h"
 
 typedef Value* (*NativeMethod)(Value* receiver, int arg_count, Value** args);

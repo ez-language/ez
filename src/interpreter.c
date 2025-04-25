@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -8,126 +7,120 @@
 #include "environment.h"
 #include "native_method.h"
 
-Environment global_env = {0};
+HashTable global_env;
 
-Value eval_expr(Expr* expr) {
+Value* eval_expr(Expr* expr) {
     switch (expr->type) {
-        case EXPR_LITERAL:
-            if (strcmp(expr->literal, "true") == 0) {
-                return (Value){ .type = VAL_BOOL, .boolean = true };
-            } else if (strcmp(expr->literal, "false") == 0) {
-                return (Value){ .type = VAL_BOOL, .boolean = false };
-            } else if (expr->literal_type == LITERAL_NUMBER) {
-                return (Value){ .type = VAL_NUMBER, .number = atof(expr->literal) };
-            } else if (expr->literal_type == LITERAL_STRING) {
-                String* new_string = malloc(sizeof(String));
-                new_string->chars = strdup(expr->literal);
-                new_string->length = strlen(new_string->chars);
-                return (Value){ .type = VAL_STRING, .string = new_string };
+        case EXPR_LITERAL: {
+            if (strcmp(expr->as.literal.literal, "true") == 0) {
+                Value* v = malloc(sizeof(Value));
+                v->type = VAL_BOOL;
+                v->boolean = true;
+                return v;
+            } else if (strcmp(expr->as.literal.literal, "false") == 0) {
+                Value* v = malloc(sizeof(Value));
+                v->type = VAL_BOOL;
+                v->boolean = false;
+                return v;
+            } else if (expr->as.literal.literal_type == LITERAL_NUMBER) {
+                return alloc_number(atof(expr->as.literal.literal));
             } else {
-                printf("[ERROR] Unknown literal type\n");
-                exit(1);
+                return alloc_string(expr->as.literal.literal);
             }
+        }
         case EXPR_VARIABLE:
-            return env_get(&global_env, expr->variable.name);
-        case EXPR_PRINT:
-            Value result = eval_expr(expr->print.expression);
-            print_value(result);
-            return result;
+            return env_get(&global_env, expr->as.variable.name);
+        case EXPR_PRINT: {
+            Value* res = eval_expr(expr->as.print.expression);
+            print_value(*res);
+            return res;
+        }
         case EXPR_BINARY: {
-            Value left = eval_expr(expr->binary.left);
-            Value right = eval_expr(expr->binary.right);
-            switch (expr->binary.operator.type) {
+            Value* L = eval_expr(expr->as.binary.left);
+            Value* R = eval_expr(expr->as.binary.right);
+            switch (expr->as.binary.operator.type) {
                 case TOKEN_PLUS:
-                    if (left.type == VAL_STRING && right.type == VAL_STRING) {
-                        size_t len = left.string->length + right.string->length + 1;
-                        char *concat = malloc(len);
-                        strcpy(concat, left.string->chars);
-                        strcat(concat, right.string->chars);
-
-                        String *result_string = malloc(sizeof(String));
-                        result_string->chars = concat;
-                        result_string->length = len - 1;
-
-                        return (Value){ .type = VAL_STRING, .string = result_string };
-                    } else if (left.type == VAL_NUMBER && right.type == VAL_NUMBER) {
-                        return (Value){ .type = VAL_NUMBER, .number = left.number + right.number };
+                    if (L->type == VAL_STRING && R->type == VAL_STRING) {
+                        size_t ln = L->string->length + R->string->length + 1;
+                        char* buf = malloc(ln);
+                        strcpy(buf, L->string->chars);
+                        strcat(buf, R->string->chars);
+                        return alloc_string(buf);
                     }
-                    break;
-                case TOKEN_MINUS:
-                    return (Value){ .type = VAL_NUMBER, .number = left.number - right.number };
-                case TOKEN_STAR:
-                    return (Value){ .type = VAL_NUMBER, .number = left.number * right.number };
-                case TOKEN_SLASH:
-                    return (Value){ .type = VAL_NUMBER, .number = left.number / right.number };
-                default:
-                    printf("[ERROR] Invalid binary operator\n");
-                    exit(1);
+                    return alloc_number(L->number + R->number);
+                case TOKEN_MINUS: return alloc_number(L->number - R->number);
+                case TOKEN_STAR:  return alloc_number(L->number * R->number);
+                case TOKEN_SLASH: return alloc_number(L->number / R->number);
+                default:          exit(1);
             }
-            exit(1);
+        }
+        case EXPR_ARRAY: {
+            Value* arr = alloc_array(expr->as.array.count);
+            for (int i = 0; i < expr->as.array.count; i++) {
+                arr->array->items[arr->array->length++] = eval_expr(expr->as.array.elements[i]);
+            }
+            return arr;
         }
         case EXPR_CALL_METHOD: {
-            Value receiver = eval_expr(expr->call_method.receiver);
-            const char* method_name = expr->call_method.method_name;
-        
-            Value* args = NULL;
-            int arg_count = expr->call_method.arg_count;
-        
-            NativeMethod method = get_native_method(&receiver, method_name);
-
-            if (method != NULL) {
-                return *method(&receiver, arg_count, &args);
-            } else {
-                printf("[ERROR] Method '%s' not defined for this type.\n", method_name);
+            Value* recv = eval_expr(expr->as.call_method.receiver);
+            int n = expr->as.call_method.arg_count;
+            Expr** args_e = expr->as.call_method.arguments;
+            Value** args = malloc(sizeof(Value*) * n);
+            for (int i = 0; i < n; i++) args[i] = eval_expr(args_e[i]);
+            NativeMethod m = get_native_method(recv, expr->as.call_method.method_name);
+            if (!m) {
+                printf("[ERROR] undefined method '%s'\\n", expr->as.call_method.method_name);
                 exit(1);
             }
-        }        
+            return m(recv, n, args);
+        }
     }
-
-    printf("[ERROR] Invalid primary expression\n");
+    printf("[ERROR] Invalid primary expression\\n");
     exit(1);
 }
 
-void print_value(Value value) {
-    switch (value.type) {
+void print_value(Value v) {
+    switch (v.type) {
+        case VAL_NULL:
+            printf("null\\n");
+            break;
         case VAL_NUMBER:
-            if (value.number == (int)value.number) {
-                printf("%d\n", (int)value.number);
-            } else {
-                printf("%f\n", value.number);
-            }
+            if ((int)v.number == v.number) printf("%d\\n", (int)v.number);
+            else                          printf("%f\\n", v.number);
             break;
         case VAL_STRING:
-            printf("%s", value.string->chars);
+            printf("%s\\n", v.string->chars);
             break;
         case VAL_BOOL:
-            printf(value.boolean ? "true" : "false");
+            printf(v.boolean ? "true\\n" : "false\\n");
+            break;
+        case VAL_ARRAY:
+            printf("[array length: %zu]\\n", v.array->length);
             break;
         default:
-            printf("[unknown type]");
+            printf("[unknown type]\\n");
     }
 }
 
-void exec_stmt(Stmt* stmt) {
-    switch (stmt->type) {
+void exec_stmt(Stmt* s) {
+    switch (s->type) {
         case STMT_VAR: {
-            Value value = eval_expr(stmt->var.value);
-            env_define(&global_env, stmt->var.name, value);
-
-            printf("[var] %s = ", stmt->var.name);
-            print_value(value);
-
+            Value* val = eval_expr(s->as.var.value);
+            env_define(&global_env, s->as.var.name, *val);
+            printf("[var] %s = ", s->as.var.name);
+            print_value(*val);
             break;
         }
         case STMT_PRINT: {
-            Value result = eval_expr(stmt->print.expression);
-            print_value(result);
+            Value* res = eval_expr(s->as.print.expression);
+            print_value(*res);
             break;
         }
     }
 }
 
-void interpret(StmtList *stmts) {
+void interpret(StmtList* stmts) {
+    env_init(&global_env);
     for (size_t i = 0; i < stmts->count; i++) {
         exec_stmt(stmts->statements[i]);
     }

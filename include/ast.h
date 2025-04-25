@@ -1,9 +1,12 @@
+// include/ast.h
 #ifndef AST_H
 #define AST_H
 
 #include <stdlib.h>
 #include "lexer.h"
 
+// Forward declarations
+typedef struct Expr Expr;
 typedef struct Stmt Stmt;
 
 typedef struct {
@@ -12,71 +15,79 @@ typedef struct {
     size_t capacity;
 } StmtList;
 
-typedef enum {
+enum ExprType {
     EXPR_LITERAL,
-    EXPR_BINARY,
     EXPR_VARIABLE,
     EXPR_PRINT,
+    EXPR_BINARY,
+    EXPR_ARRAY,
     EXPR_CALL_METHOD
-} ExprType;
+};
 
-// Declarar o tipo Expr antes de usá-lo
-typedef struct Expr Expr;
+enum LiteralType {
+    LITERAL_NUMBER,
+    LITERAL_STRING
+};
 
+// AST: chamada de método
 typedef struct {
     Expr* receiver;
     const char* method_name;
-    int arg_count;
     Expr** arguments;
+    int arg_count;
 } CallMethodExpr;
 
-typedef enum {
-    LITERAL_NUMBER,
-    LITERAL_STRING
-} LiteralType;
+// AST: array literal
+typedef struct {
+    Expr** elements;
+    int count;
+} ArrayExpr;
 
+// Estrutura principal de expressão
 struct Expr {
-    ExprType type;
+    enum ExprType type;
     union {
         struct {
-            const char *literal;
-            LiteralType literal_type;
-        };
+            const char* literal;
+            enum LiteralType literal_type;
+        } literal;
         struct {
-            struct Expr *left;
-            Token operator;
-            struct Expr *right;
-        } binary;
-        struct {
-            const char *name;
+            const char* name;
         } variable;
         struct {
             Expr* expression;
         } print;
+        struct {
+            Expr* left;
+            Token operator;
+            Expr* right;
+        } binary;
+        ArrayExpr array;
         CallMethodExpr call_method;
-    };
+    } as;
 };
 
-typedef enum {
+// Statements
+enum StmtType {
     STMT_VAR,
     STMT_PRINT
-} StmtType;
+};
 
 typedef struct {
-    const char *name;
-    Expr *value;
+    const char* name;
+    Expr* value;
 } VarStmt;
 
 typedef struct {
     Expr* expression;
 } PrintStmt;
 
-typedef struct Stmt {
-    StmtType type;
+struct Stmt {
+    enum StmtType type;
     union {
         VarStmt var;
         PrintStmt print;
-    };
-} Stmt;
+    } as;
+};
 
-#endif
+#endif // AST_H

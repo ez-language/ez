@@ -3,15 +3,19 @@
 
 #include "interpreter.h"
 
-#define MAX_VARIABLES 256
+#define HASH_TABLE_SIZE 256
 
 typedef struct {
-    char *names[MAX_VARIABLES];
-    Value values[MAX_VARIABLES];
-    int count;
-} Environment;
+    char* name;
+    Value value;
+} HashEntry;
 
-void env_define(Environment *env, const char *name, Value value);
-Value env_get(Environment *env, const char *name);
+typedef struct {
+    HashEntry* table[HASH_TABLE_SIZE];
+} HashTable;
+
+void env_init(HashTable* env);
+void env_define(HashTable* env, const char* name, Value value);
+Value* env_get(HashTable* env, const char* name);
 
 #endif

@@ -1,3 +1,7 @@
 var text: string = "Hello, World!"
 
 print(text.length())
+
+var list: int = [1, 2, 3, 4]
+
+print(list.length())
