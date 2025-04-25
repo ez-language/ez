@@ -4,4 +4,5 @@ print(text.length())
 
 var list: int = [1, 2, 3, 4]
 
+print(list)
 print(list.length())

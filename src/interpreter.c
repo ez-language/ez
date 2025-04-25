@@ -32,7 +32,7 @@ Value* eval_expr(Expr* expr) {
             return env_get(&global_env, expr->as.variable.name);
         case EXPR_PRINT: {
             Value* res = eval_expr(expr->as.print.expression);
-            print_value(*res);
+            print_value(*res, true);
             return res;
         }
         case EXPR_BINARY: {
@@ -79,26 +79,41 @@ Value* eval_expr(Expr* expr) {
     exit(1);
 }
 
-void print_value(Value v) {
+void print_value(Value v, bool add_newline) {
     switch (v.type) {
+        case VAL_ARRAY: {
+            printf("[");
+            for (size_t i = 0; i < v.array->length; i++) {
+                if (i > 0) {
+                    printf(", ");
+                }
+                print_value(*v.array->items[i], false);
+            }
+            printf("]");
+            break;
+        }
         case VAL_NULL:
-            printf("null\n");
+            printf("null");
             break;
         case VAL_NUMBER:
-            if ((int)v.number == v.number) printf("%d\n", (int)v.number);
-            else                          printf("%f\n", v.number);
+            if ((int)v.number == v.number) {
+                printf("%d", (int)v.number);
+            } else {
+                printf("%f", v.number);
+            }
             break;
         case VAL_STRING:
-            printf("%s\n", v.string->chars);
+            printf("%s", v.string->chars);
             break;
         case VAL_BOOL:
-            printf(v.boolean ? "true\n" : "false\n");
-            break;
-        case VAL_ARRAY:
-            printf("[array length: %zu]\n", v.array->length);
+            printf(v.boolean ? "true" : "false");
             break;
         default:
-            printf("[unknown type]\n");
+            printf("[unknown type]");
+    }
+
+    if (add_newline) {
+        printf("\n");
     }
 }
 
@@ -108,12 +123,12 @@ void exec_stmt(Stmt* s) {
             Value* val = eval_expr(s->as.var.value);
             env_define(&global_env, s->as.var.name, *val);
             printf("[var] %s = ", s->as.var.name);
-            print_value(*val);
+            print_value(*val, true);
             break;
         }
         case STMT_PRINT: {
             Value* res = eval_expr(s->as.print.expression);
-            print_value(*res);
+            print_value(*res, true);
             break;
         }
     }
