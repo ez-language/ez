@@ -91,7 +91,11 @@ Value eval_expr(Expr* expr) {
 void print_value(Value value) {
     switch (value.type) {
         case VAL_NUMBER:
-            printf("%f", value.number);
+            if (value.number == (int)value.number) {
+                printf("%d\n", (int)value.number);
+            } else {
+                printf("%f\n", value.number);
+            }
             break;
         case VAL_STRING:
             printf("%s", value.string->chars);

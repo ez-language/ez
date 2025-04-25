@@ -43,9 +43,9 @@ Value* native_length(Value* receiver, int arg_count, Value** args) {
 
     switch (receiver->type) {
         case VAL_STRING:
-            return alloc_number((double)receiver->string->length);
+            return alloc_number((int)receiver->string->length);
         case VAL_ARRAY:
-            return alloc_number((double)receiver->array->length);
+            return alloc_number((int)receiver->array->length);
         default:
             return NULL;
     }
