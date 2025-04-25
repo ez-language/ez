@@ -4,7 +4,6 @@
 
 #include "parser.h"
 
-// Forward declaration
 static Expr* parse_expression(Parser* parser);
 
 static void advance(Parser *parser) {
@@ -50,7 +49,7 @@ static Expr* parse_primary(Parser* parser) {
             expr->as.variable.name = parser->current.lexeme;
             break;
         case TOKEN_LBRACKET: {
-            advance(parser); // consume '['
+            advance(parser);
             Expr** elements = NULL;
             int count = 0, capacity = 0;
             while (parser->current.type != TOKEN_RBRACKET) {
@@ -72,7 +71,6 @@ static Expr* parse_primary(Parser* parser) {
             exit(1);
     }
     advance(parser);
-    // Method call
     if (match(parser, TOKEN_DOT)) {
         Token method_name = consume(parser, TOKEN_IDENTIFIER, "Expected method name after '.'");
         consume(parser, TOKEN_LPAREN, "Expected '(' after method name");
@@ -102,7 +100,7 @@ static Expr* parse_expression(Parser* parser) {
 }
 
 static Stmt* parse_print_stmt(Parser* parser) {
-    advance(parser); // consume 'print'
+    advance(parser);
     consume(parser, TOKEN_LPAREN, "Expected '(' after 'print'");
     Expr* expression = parse_expression(parser);
     consume(parser, TOKEN_RPAREN, "Expected ')' after print expression");
@@ -122,7 +120,7 @@ StmtList parse(Lexer *lexer) {
             Token name = parser.current;
             advance(&parser);
             consume(&parser, TOKEN_COLON, "Expected ':' after var name");
-            advance(&parser); // ignore type annotation
+            advance(&parser);
             consume(&parser, TOKEN_ASSIGN, "Expected '=' after variable declaration");
             Expr* value = parse_expression(&parser);
             Stmt* stmt = malloc(sizeof(Stmt));
