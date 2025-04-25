@@ -69,36 +69,36 @@ Value* eval_expr(Expr* expr) {
             for (int i = 0; i < n; i++) args[i] = eval_expr(args_e[i]);
             NativeMethod m = get_native_method(recv, expr->as.call_method.method_name);
             if (!m) {
-                printf("[ERROR] undefined method '%s'\\n", expr->as.call_method.method_name);
+                printf("[ERROR] undefined method '%s'\n", expr->as.call_method.method_name);
                 exit(1);
             }
             return m(recv, n, args);
         }
     }
-    printf("[ERROR] Invalid primary expression\\n");
+    printf("[ERROR] Invalid primary expression\n");
     exit(1);
 }
 
 void print_value(Value v) {
     switch (v.type) {
         case VAL_NULL:
-            printf("null\\n");
+            printf("null\n");
             break;
         case VAL_NUMBER:
-            if ((int)v.number == v.number) printf("%d\\n", (int)v.number);
-            else                          printf("%f\\n", v.number);
+            if ((int)v.number == v.number) printf("%d\n", (int)v.number);
+            else                          printf("%f\n", v.number);
             break;
         case VAL_STRING:
-            printf("%s\\n", v.string->chars);
+            printf("%s\n", v.string->chars);
             break;
         case VAL_BOOL:
-            printf(v.boolean ? "true\\n" : "false\\n");
+            printf(v.boolean ? "true\n" : "false\n");
             break;
         case VAL_ARRAY:
-            printf("[array length: %zu]\\n", v.array->length);
+            printf("[array length: %zu]\n", v.array->length);
             break;
         default:
-            printf("[unknown type]\\n");
+            printf("[unknown type]\n");
     }
 }
 
