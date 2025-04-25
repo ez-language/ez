@@ -1,4 +1,4 @@
-var text: string = "Hello, World!"
+var text: string = 'Hello, World!'
 
 print(text)
 print(text.length())

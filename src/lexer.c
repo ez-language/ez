@@ -140,15 +140,15 @@ Token lexer_next_token(Lexer *lexer) {
         return make_token(TOKEN_NUMBER, number);
     }    
 
-    if (c == '"') {
-        if (lexer->source[lexer->position + 1] == '"' &&
-            lexer->source[lexer->position + 2] == '"') {
+    if (c == '"' || c == '\'') {
+        if (lexer->source[lexer->position + 1] == c &&
+            lexer->source[lexer->position + 2] == c) {
             lexer->position += 3;
             int start = lexer->position;
     
-            while (!(current_char(lexer) == '"' &&
-                     lexer->source[lexer->position + 1] == '"' &&
-                     lexer->source[lexer->position + 2] == '"') &&
+            while (!(current_char(lexer) == c &&
+                     lexer->source[lexer->position + 1] == c &&
+                     lexer->source[lexer->position + 2] == c) &&
                    current_char(lexer) != '\0') {
                 advance(lexer);
             }
@@ -165,7 +165,7 @@ Token lexer_next_token(Lexer *lexer) {
             int start = lexer->position + 1;
             advance(lexer);
     
-            while (current_char(lexer) != '"' && current_char(lexer) != '\0') {
+            while (current_char(lexer) != c && current_char(lexer) != '\0') {
                 if (current_char(lexer) == '\\') {
                     advance(lexer);
                     if (current_char(lexer) != '\0') {
@@ -179,7 +179,7 @@ Token lexer_next_token(Lexer *lexer) {
             int end = lexer->position;
             char *text = substring(lexer->source, start, end);
     
-            if (current_char(lexer) == '"') advance(lexer);
+            if (current_char(lexer) == c) advance(lexer);
     
             return make_token(TOKEN_STRING, text);
         }
