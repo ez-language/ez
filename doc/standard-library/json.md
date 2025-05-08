@@ -15,7 +15,7 @@ The `json` module provides functions to encode and decode data in JSON format.
 ```ez
 import json
 
-text = '{"name": "ezlang", "year": 2025}'
+text: string = '{"name": "ezlang", "year": 2025}'
 data = json.parse(text)
 
 print(data.name) // ezlang

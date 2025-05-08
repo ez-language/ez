@@ -35,7 +35,7 @@ The `math` module provides mathematical functions and constants.
 ```ez
 import math
 
-area = math.pi * math.pow(5, 2)
+area: float = math.pi * math.pow(5, 2)
 
 print(area)
 ```
