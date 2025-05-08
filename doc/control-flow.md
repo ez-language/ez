@@ -43,7 +43,7 @@ This prints numbers from 0 to 9.
 #### Loop through a list
 
 ```ez
-names = ['Anna', 'Claire', 'Leon']
+names: string[] = ['Anna', 'Claire', 'Leon']
 
 // By index
 for i in range(0, names.length()) {
