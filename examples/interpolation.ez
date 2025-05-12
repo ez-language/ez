@@ -1,0 +1,3 @@
+var result: int = 4
+
+print(`Result: ${result}`)

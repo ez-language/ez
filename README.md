@@ -1,6 +1,8 @@
 # ez
 
-![Status](https://img.shields.io/badge/status-early%20stage-blueviolet)
+> **Warning**
+>
+> ez is in an early stage of development — expect breaking changes and unfinished features. It's not ready for production use.
 
 **ez** is a strongly and statically typed programming language designed to be simple, readable, and powerful.
 
