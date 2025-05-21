@@ -73,7 +73,7 @@ The `match` expression in **ez** allows you to **pattern match** on values, espe
 ### Basic Syntax
 
 ```ez
-match expression {
+match (expression) {
   Pattern1 => expression1
   Pattern2 => expression2
   ...
@@ -100,7 +100,7 @@ You can match on it like this:
 ```ez
 name: Option[string] = Some('Alice')
 
-greeting = match name {
+greeting = match (name) {
   Some(value) => `Hello, ${value}!`
   None => 'Hello, guest!'
 }
@@ -120,7 +120,7 @@ enum Result[T, E] {
 
 res: Result[int, string] = Ok(42)
 
-match res {
+match (res) {
   Ok(val) => print(`Success with value: ${val}`)
   Err(msg) => print(`Error occurred: ${msg}`)
 }
@@ -137,9 +137,9 @@ enum Color {
   Blue
 }
 
-c: Color = Red
+color: Color = Red
 
-match c {
+match (color) {
   Red => print('Red')
   Green => print('Green')
   Blue => print('Blue')
@@ -152,7 +152,7 @@ match c {
 `match` returns the value of the executed branch:
 
 ```ez
-result = match someOption {
+result = match (someOption) {
   Some(v) => v
   None => 0
 }

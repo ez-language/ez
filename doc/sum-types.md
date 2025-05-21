@@ -42,7 +42,7 @@ enum Result[T, E] {
 ### Creating values
 
 ```ez
-name: Option[string] = Some('Ana')
+name: Option[string] = Some('Anna')
 age: Option[int] = None
 
 result: Result[int, string] = Ok(42)
@@ -56,14 +56,14 @@ failure: Result[int, string] = Err('Connection error')
 The `match` expression allows safely deconstructing and handling each variant:
 
 ```ez
-match name {
+match (name) {
   Some(value) => print(`Name: ${value}`)
   None => print('No name')
 }
 ```
 
 ```ez
-match result {
+match (result) {
   Ok(value) => print(`Success: ${value}`)
   Err(e) => print(`Failure: ${e}`)
 }
@@ -78,8 +78,8 @@ All variants **must be covered**. If not, the compiler will emit an error.
 `match` can return a value directly:
 
 ```ez
-message = match name {
-  Some(v) => `Welcome, ${v}`
+message = match (name) {
+  Some(value) => `Welcome, ${value}`
   None => 'Anonymous user'
 }
 ```
