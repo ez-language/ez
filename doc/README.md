@@ -8,6 +8,7 @@ Welcome to **ez Language Documentation**. Here you will find details about sinta
 -   [Variable Types](variable-types.md)
 -   [Primitive Types](primitive-types.md)
 -   [Composite Types](composite-types.md)
+-   [Sum Types](sum-types.md)
 -   [Custom Types](custom-types.md)
 -   [Comments](comments.md)
 -   [Built-ins](builtins.md)

@@ -32,16 +32,19 @@ isStudent: boolean = true
 
 ## Missing Values
 
--   `null`: intentional absence of value
+The ez language does **not** include `null` or `undefined`.
+
+To represent the absence of a value, use the `Option[T]` sum type:
 
 ```ez
-name: string = null
+name: Option[string] = None
 ```
 
--   `undefined`: undefined value (uninitialized variable or missing field in a dynamic structure)
+To indicate an uninitialized or computed-later value, define an optional and update it later:
 
 ```ez
-x: int
+x: Option[int] = None
 
-print(x) // undefined
+// Later in the code
+x = Some(42)
 ```
