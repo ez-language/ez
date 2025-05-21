@@ -2,6 +2,10 @@
 
 ## Conditional
 
+### if / else
+
+Executes a block of code conditionally.
+
 ```ez
 if (age > 18) {
     print('Adult')
@@ -57,6 +61,8 @@ for name in names {
 ```
 
 ### `while` Loop
+
+Repeats a block of code while a condition is true.
 
 ```ez
 while (count < 5) {
