@@ -1,101 +1,60 @@
-## Sum Types (Tagged Enums)
+# Sum Types
 
-The **ez** language supports **sum types** through the `enum` keyword. These types allow representing data that can take on **different named variants**, each optionally carrying data. Sum types are ideal for modeling optional values, operation results, and more.
+Sum types (also known as tagged unions or variant types) allow a value to be one of several different, but fixed, forms. They are useful for modeling cases where a value can have different shapes.
 
-**ez does not have `null`**. Instead, absence of a value is expressed using sum types like `Option`.
+## Defining a Sum Type
 
-### Definition
-
-Sum types are declared using the `enum` keyword:
+Use the `type` keyword to define a sum type with multiple variants:
 
 ```ez
-enum TypeName[Gen1, Gen2, ...] {
-  Variant1(field1: Type1, field2: Type2)
-  Variant2
-  Variant3(value: Type)
+type Result {
+  Ok(value: string)
+  Err(message: string)
 }
 ```
 
--   Each **variant** may contain **named fields**, a **single unnamed value**, or **no data**.
--   **Generic types** are supported via square brackets `[]`.
+## Using a Sum Type
 
-#### Example: optional value
+You can use pattern matching with `match` to handle each variant of a sum type.
 
 ```ez
-enum Option[T] {
-  Some(value: T)
-  None
+function handleResult(result: Result) {
+  match (result) {
+    Ok(value) => print(`Success: ${value}`)
+    Err(message) => print(`Error: ${message}`)
+  }
 }
 ```
 
-#### Example: operation result
+## Wildcard Matching
+
+Use `_` as a wildcard to match any value not already covered:
 
 ```ez
-enum Result[T, E] {
-  Ok(value: T)
-  Err(error: E)
+match (option) {
+  Some(value) => print(value)
+  _ => print('No value')
 }
 ```
 
----
+## Nesting and Destructuring
 
-### Creating values
-
-```ez
-name: Option[string] = Some('Anna')
-age: Option[int] = None
-
-result: Result[int, string] = Ok(42)
-failure: Result[int, string] = Err('Connection error')
-```
-
----
-
-### Pattern matching with `match`
-
-The `match` expression allows safely deconstructing and handling each variant:
+Sum types support nested patterns and destructuring:
 
 ```ez
-match (name) {
-  Some(value) => print(`Name: ${value}`)
-  None => print('No name')
+type Shape {
+  Circle(radius: float)
+  Rectangle(width: float, height: float)
+}
+
+function area(shape: Shape): float {
+  match (shape) {
+    Circle(radius) => 3.14 * radius * radius
+    Rectangle(width, height) => width * height
+  }
 }
 ```
 
-```ez
-match (result) {
-  Ok(value) => print(`Success: ${value}`)
-  Err(e) => print(`Failure: ${e}`)
-}
-```
+Sum types are **exhaustive**: all possible variants must be handled unless a wildcard is used.
 
-All variants **must be covered**. If not, the compiler will emit an error.
-
----
-
-### Expression form
-
-`match` can return a value directly:
-
-```ez
-message = match (name) {
-  Some(value) => `Welcome, ${value}`
-  None => 'Anonymous user'
-}
-```
-
----
-
-### Best practices
-
--   Use `Option[T]` instead of allowing `null`.
--   Use `Result[T, E]` to model success and failure.
--   Avoid using booleans with additional optional values—prefer dedicated sum types.
-
----
-
-### Notes
-
--   Variants support named fields or a single unnamed value.
--   `match` is required to be exhaustive unless explicitly marked otherwise (future feature).
--   Sum types are a core feature for safe and expressive data modeling in ez.
+They are ideal for representing safe and expressive data flows without relying on `null` or `undefined`.

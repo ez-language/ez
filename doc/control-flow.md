@@ -74,92 +74,35 @@ while (count < 5) {
 
 ## Match Expression
 
-The `match` expression in **ez** allows you to **pattern match** on values, especially useful with sum types (`enum`s). It is a powerful control flow construct that forces you to handle **all possible cases**, ensuring safer and more expressive code.
-
-### Basic Syntax
+The `match` expression allows you to compare a value against multiple patterns.
 
 ```ez
-match (expression) {
-  Pattern1 => expression1
-  Pattern2 => expression2
-  ...
+match (result) {
+  Ok(value) => print(`Value: ${value}`)
+  Err(error) => print(`Error: ${error}`)
 }
 ```
 
--   Each Pattern can match a variant of a sum type or a literal value.
--   All cases must be covered; otherwise, the compiler raises an error.
--   `match` is an expression, meaning it evaluates to a value.
-
-### Example with Sum Types
-
-Given the Option[T] enum:
+Each arm follows the pattern:
 
 ```ez
-enum Option[T] {
-  Some(value: T)
-  None
+Pattern => Expression
+```
+
+Arms are matched in order, and the first one that matches will be executed. Pattern matching supports destructuring and variant matching for sum types.
+
+```ez
+match (user) {
+  Admin(name) => print(`Admin: ${name}`)
+  Guest => print('Guest user')
 }
 ```
 
-You can match on it like this:
+The `match` expression is exhaustive, and must handle all possible variants unless a wildcard (`_`) is used:
 
 ```ez
-name: Option[string] = Some('Alice')
-
-greeting = match (name) {
-  Some(value) => `Hello, ${value}!`
-  None => 'Hello, guest!'
-}
-
-print(greeting)
-```
-
-### Destructuring
-
-Patterns can destructure variants with data fields:
-
-```ez
-enum Result[T, E] {
-  Ok(value: T)
-  Err(error: E)
-}
-
-res: Result[int, string] = Ok(42)
-
-match (res) {
-  Ok(val) => print(`Success with value: ${val}`)
-  Err(msg) => print(`Error occurred: ${msg}`)
-}
-```
-
-### Exhaustiveness
-
-Every possible variant must be matched:
-
-```ez
-enum Color {
-  Red
-  Green
-  Blue
-}
-
-color: Color = Red
-
-match (color) {
-  Red => print('Red')
-  Green => print('Green')
-  Blue => print('Blue')
-  // Missing any variant here causes a compile error
-}
-```
-
-### Use as Expression
-
-`match` returns the value of the executed branch:
-
-```ez
-result = match (someOption) {
-  Some(v) => v
-  None => 0
+match (option) {
+  Some(value) => print(value)
+  _ => print('No value')
 }
 ```
