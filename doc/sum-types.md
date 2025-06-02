@@ -8,8 +8,8 @@ Use the `type` keyword to define a sum type with multiple variants:
 
 ```ez
 type Result {
-  Ok(value: string)
-  Err(message: string)
+	Ok(value: string)
+	Err(message: string)
 }
 ```
 
@@ -19,10 +19,10 @@ You can use pattern matching with `match` to handle each variant of a sum type.
 
 ```ez
 function handleResult(result: Result) {
-  match (result) {
-    Ok(value) => print(`Success: ${value}`)
-    Err(message) => print(`Error: ${message}`)
-  }
+	match (result) {
+		Ok(value) => print(`Success: ${value}`)
+		Err(message) => print(`Error: ${message}`)
+	}
 }
 ```
 
@@ -32,8 +32,8 @@ Use `_` as a wildcard to match any value not already covered:
 
 ```ez
 match (option) {
-  Some(value) => print(value)
-  _ => print('No value')
+	Some(value) => print(value)
+	_ => print('No value')
 }
 ```
 
@@ -43,15 +43,15 @@ Sum types support nested patterns and destructuring:
 
 ```ez
 type Shape {
-  Circle(radius: float)
-  Rectangle(width: float, height: float)
+	Circle(radius: float)
+	Rectangle(width: float, height: float)
 }
 
 function area(shape: Shape): float {
-  match (shape) {
-    Circle(radius) => 3.14 * radius * radius
-    Rectangle(width, height) => width * height
-  }
+	match (shape) {
+		Circle(radius) => 3.14 * radius * radius
+		Rectangle(width, height) => width * height
+	}
 }
 ```
 

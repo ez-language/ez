@@ -78,8 +78,8 @@ The `match` expression allows you to compare a value against multiple patterns.
 
 ```ez
 match (result) {
-  Ok(value) => print(`Value: ${value}`)
-  Err(error) => print(`Error: ${error}`)
+	Ok(value) => print(`Value: ${value}`)
+	Err(error) => print(`Error: ${error}`)
 }
 ```
 
@@ -93,8 +93,8 @@ Arms are matched in order, and the first one that matches will be executed. Patt
 
 ```ez
 match (user) {
-  Admin(name) => print(`Admin: ${name}`)
-  Guest => print('Guest user')
+	Admin(name) => print(`Admin: ${name}`)
+	Guest => print('Guest user')
 }
 ```
 
@@ -102,7 +102,7 @@ The `match` expression is exhaustive, and must handle all possible variants unle
 
 ```ez
 match (option) {
-  Some(value) => print(value)
-  _ => print('No value')
+	Some(value) => print(value)
+	_ => print('No value')
 }
 ```
