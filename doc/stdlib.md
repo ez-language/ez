@@ -21,3 +21,6 @@ The **ez standard library** provides a collection of built-in modules to help yo
 
 -   [`json`](standard-library/json.md)  
     Parse JSON strings and convert data to JSON format.
+
+-   [`regex`](standard-library/regex.md)  
+    Work with regular expressions to search, match, and replace patterns in strings.
