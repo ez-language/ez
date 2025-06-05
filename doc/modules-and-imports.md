@@ -8,11 +8,11 @@ Modules allow you to organize your code in separate files, and you can import fu
 // file: math.ez
 
 function add(a: int, b: int): int {
-  return a + b
+	return a + b
 }
 
 function subtract(a: int, b: int): int {
-  return a - b
+	return a - b
 }
 ```
 

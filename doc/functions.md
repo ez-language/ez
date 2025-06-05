@@ -6,7 +6,7 @@ Functions allow you to encapsulate logic, making your code reusable and easier t
 
 ```ez
 function sum(a: int, b: int): int {
-  return a + b
+	return a + b
 }
 
 print(sum(2, 2)) // 4
@@ -16,7 +16,7 @@ print(sum(2, 2)) // 4
 
 ```ez
 const double = (x: int): int => {
-  return x * 2
+	return x * 2
 }
 
 print(double(10)) // 20

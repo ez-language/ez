@@ -14,10 +14,10 @@ The `ez` language provides two main variable types that control mutability and s
 globalVar = 1 // Global variable
 
 function test() {
-    var localVar = 2 // Local variable
+	var localVar = 2 // Local variable
 
-    print(globalVar) // 1 (accesses the global variable)
-    print(localVar) // 2 (accesses the local variable within the function)
+	print(globalVar) // 1 (accesses the global variable)
+	print(localVar) // 2 (accesses the local variable within the function)
 }
 
 test()
@@ -44,13 +44,13 @@ However, if the constant is a reference type (such as an object or array), its i
 
 ```ez
 type Person = {
-  name: string
-  age: int
+	name: string
+	age: int
 }
 
 const person: Person = {
-  name: 'Ana',
-  age: 30
+	name: 'Ana',
+	age: 30
 }
 
 person.age = 31 // Change the value of person age
