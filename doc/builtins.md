@@ -14,5 +14,7 @@ match (name) {
 -   `print()`: displays values to the console.
 
 ```ez
+name: string = 'John'
+
 print(`Hello, ${name}!`)
 ```
