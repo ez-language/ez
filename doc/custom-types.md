@@ -40,8 +40,7 @@ Each variant is explicitly tagged, so the compiler can verify exhaustiveness
 and the programmer always knows which variant they are handling.
 
 ```ez
-// Error! Untagged union is not allowed
-type result = string | int
+type result = string | int // Error! Untagged union is not allowed
 
 // Tagged union — each variant is named
 type Result {
