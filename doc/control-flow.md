@@ -172,11 +172,13 @@ const label: int = match (result) {
 Guards are evaluated in order, and the first one that matches is used.
 
 ```ez
+age: int = 14
+
 const label: string = match (age) {
     x if (x > 18) => 'Adult'
     x if (x > 12) => 'Teen'
     _             => 'Minor'
 }
 
-print(label)
+print(label) // Teen
 ```
