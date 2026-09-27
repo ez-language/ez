@@ -33,17 +33,17 @@ translations: Dictionary = {
 
 ## Type Union
 
-ez does not support untagged type unions (e.g. `string | int`).
+`ez` does not support untagged type unions (e.g. `string | int`).
 
 When a value can be one of several types, use a sum type (tagged union).
 Each variant is explicitly tagged, so the compiler can verify exhaustiveness
 and the programmer always knows which variant they are handling.
 
 ```ez
-type result = string | int // Error! Untagged union is not allowed
+type Result = string | int // Error! Untagged union is not allowed
 
 // Tagged union — each variant is named
-type Result {
+type Result = {
     Text(value: string)
     Num(value: int)
 }
@@ -55,12 +55,34 @@ the type system forbids it.
 
 ## Type Intersection
 
+Intersection is a type alias that merges fields. It does not create subtyping.
+
 ```ez
-type animal = {
+type Animal = {
     name: string
 }
 
 type Dog = Animal & {
     breed: string
 }
+```
+
+## Subtyping
+
+`ez` does not support subtyping. A type defined with intersection (`&`)
+is a flat alias — it merges fields but does not create an "is-a"
+relationship.
+
+```ez
+function greet(animal: Animal) {
+    print(animal.name)
+}
+
+const dog: Dog = {
+    name: 'Rex',
+    breed: 'Pug'
+}
+
+greet({ name: dog.name }) // Rex (extract the fields explicitly)
+greet(dog) // Error! Dog is not a subtype of Animal
 ```
