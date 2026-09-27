@@ -7,7 +7,7 @@ Sum types (also known as tagged unions or variant types) allow a value to be one
 Use the `type` keyword to define a sum type with multiple variants:
 
 ```ez
-type Result {
+type Result = {
 	Ok(value: string)
 	Err(message: string)
 }
@@ -42,7 +42,7 @@ match (option) {
 Sum types support nested patterns and destructuring:
 
 ```ez
-type Shape {
+type Shape = {
 	Circle(radius: float)
 	Rectangle(width: float, height: float)
 }
