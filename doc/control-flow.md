@@ -14,6 +14,17 @@ if (age > 18) {
 }
 ```
 
+`if` can also be used as an expression.
+
+```ez
+const label: string = if (age > 18) { 'Adult' } else { 'Minor' }
+
+print(label)
+```
+
+`ez` does not have else if. For multiple branches, use a match
+expression with guard conditions.
+
 ## Loop
 
 ### `for` Loop
@@ -155,4 +166,17 @@ const label: int = match (result) {
     Ok(value) => `Value: ${value}` // Error! string is not int
     Err(error) => `Error: ${error}`
 }
+```
+
+`match` expressions with guard conditions replaces both `else if` chains and `switch` / `case` statements.
+Guards are evaluated in order, and the first one that matches is used.
+
+```ez
+const label: string = match (age) {
+    x if (x > 18) => 'Adult'
+    x if (x > 12) => 'Teen'
+    _             => 'Minor'
+}
+
+print(label)
 ```
