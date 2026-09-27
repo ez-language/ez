@@ -6,7 +6,7 @@
 name: Option[string] = input("What's your name?")
 
 match (name) {
-		Some(line) => print(`Hello, ${line}!`)
+	Some(line) => print(`Hello, ${line}!`)
     None => print('No input')
 }
 ```
