@@ -1,8 +1,8 @@
-## Interfaces
+# Interfaces
 
 Interfaces define the shape of an object. They describe the expected properties and their types, ensuring that any object that implements an interface matches its structure.
 
-### Basic Syntax
+## Basic Syntax
 
 ```ez
 interface InterfaceName {
@@ -11,7 +11,7 @@ interface InterfaceName {
 }
 ```
 
-### Example
+## Example
 
 ```ez
 interface User {
@@ -27,14 +27,14 @@ user: User = {
 }
 ```
 
-### Rules
+## Rules
 
 -   All properties are required by default.
 -   Interfaces are structural: any object that has the same shape is considered valid.
 -   Interfaces can be used as types for variables, function parameters, and return types.
 -   Nested interfaces are supported.
 
-### Nested Interface Example
+## Nested Interface Example
 
 ```ez
 interface Address {
@@ -58,7 +58,7 @@ user: User = {
 }
 ```
 
-### Usage in Functions
+## Usage in Functions
 
 ```ez
 interface Product {
