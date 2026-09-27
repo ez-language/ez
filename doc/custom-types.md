@@ -33,9 +33,26 @@ translations: Dictionary = {
 
 ## Type Union
 
+ez does not support untagged type unions (e.g. `string | int`).
+
+When a value can be one of several types, use a sum type (tagged union).
+Each variant is explicitly tagged, so the compiler can verify exhaustiveness
+and the programmer always knows which variant they are handling.
+
 ```ez
+// Error! Untagged union is not allowed
 type result = string | int
+
+// Tagged union — each variant is named
+type Result {
+    Text(value: string)
+    Num(value: int)
+}
 ```
+
+This ensures that "it can be A or B" always comes with a tag you can
+match on. There is no "it's one of them, but I don't know which" —
+the type system forbids it.
 
 ## Type Intersection
 
