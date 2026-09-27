@@ -28,7 +28,7 @@ The `range(start, end, step)` function generates integers from `start` up to (bu
 range(0, 5) // Produces: 0, 1, 2, 3, 4
 ```
 
-#### Basic Sintax
+#### Basic Syntax
 
 ```ez
 for i in range(0, 10) {
@@ -72,6 +72,38 @@ while (count < 5) {
 }
 ```
 
+### `break` and `continue`
+
+-	`break`: exits the current loop immediately.
+
+```ez
+for i in range(0, 10) {
+    if (i == 5) {
+        break
+    }
+
+    print(i)
+}
+// Prints: 0, 1, 2, 3, 4
+
+break // Error! break can only be used inside a loop
+```
+
+-	`continue`: skips to the next iteration.
+
+```ez
+for i in range(0, 10) {
+    if (i % 2 == 0) {
+        continue
+    }
+
+    print(i)
+}
+// Prints: 1, 3, 5, 7, 9
+
+continue // Error! continue can only be used inside a loop
+```
+
 ## Match Expression
 
 The `match` expression allows you to compare a value against multiple patterns.
@@ -104,5 +136,23 @@ The `match` expression is exhaustive, and must handle all possible variants unle
 match (option) {
 	Some(value) => print(value)
 	_ => print('No value')
+}
+```
+
+A `match` expression can also be assigned to a variable.
+
+```ez
+const label: string = match (result) {
+    Ok(value) => `Value: ${value}`
+    Err(error) => `Error: ${error}`
+}
+```
+
+All arms must evaluate to the same type, which becomes the type of the expression.
+
+```ez
+const label: int = match (result) {
+    Ok(value) => `Value: ${value}` // Error! string is not int
+    Err(error) => `Error: ${error}`
 }
 ```
