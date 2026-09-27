@@ -68,6 +68,6 @@ interface Product {
 }
 
 function printProduct(product: Product) {
-    print('Product: ${product.name} (${product.id}) - ${product.price}')
+    print(`Product: ${product.name} (${product.id}) - ${product.price}`)
 }
 ```
