@@ -25,6 +25,24 @@
 | `is`     | Identity comparison                                        |
 | `in`     | Membership check (checks if an element is in a collection) |
 
+Examples:
+
+-  `is`:
+
+```ez
+const a = { name: 'Ana', age: 30 }
+const b = { name: 'Ana', age: 30 }
+
+a == b  // true  — fields are equal
+a is b  // false — different objects in memory
+```
+
+-  `in`:
+
+```ez
+'a' in 'banana'  // true
+```
+
 ## Logical Operators
 
 | Operator | Description |
@@ -32,6 +50,14 @@
 | `and`    | Logical AND |
 | `or`     | Logical OR  |
 | `not`    | Logical NOT |
+
+Examples:
+
+-  `not`:
+
+```ez
+if not (age > 18) { ... }
+```
 
 ## Assignment Operators
 
