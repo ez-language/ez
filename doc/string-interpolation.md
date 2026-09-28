@@ -1,5 +1,9 @@
 # String Interpolation
 
 ```ez
-print(`Hello, ${name}!`)
+name: string = 'Emma'
+
+print(`Hello, ${name}!`) // Hello, Emma!
+print('Hello, ${name}!') // Hello, ${name}!
+print("Hello, ${name}!") // Hello, ${name}!
 ```
