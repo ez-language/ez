@@ -1,6 +1,6 @@
 # Modules and Imports
 
-Modules allow you to organize your code in separate files, and you can import functions and variables as needed.
+Modules allow you to organize your code in separate files, and you can import an entire module or specific items from it.
 
 ## Module Structure:
 
@@ -24,6 +24,18 @@ function subtract(a: int, b: int): int {
 import math from 'math.ez'
 
 result: int = math.add(5, 10)
+
+print(result) // 15
+```
+
+Or import specific items:
+
+```ez
+// file: main.ez
+
+import { add, subtract } from 'math.ez'
+
+result: int = add(5, 10)
 
 print(result) // 15
 ```
