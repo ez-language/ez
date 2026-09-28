@@ -1,5 +1,7 @@
 # String Interpolation
 
+Only backtick supports interpolation.
+
 ```ez
 name: string = 'Emma'
 
