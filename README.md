@@ -36,4 +36,4 @@ For upcoming features and long-term goals, see the [roadmap](doc/roadmap.md).
 
 ## Contributions
 
-We welcome ideas, suggestions, and contributions! See the [contributing guide](doc/contributing.md) for details.
+We welcome ideas, suggestions, and contributions! See the [contributing guide](CONTRIBUTING.md) for details.

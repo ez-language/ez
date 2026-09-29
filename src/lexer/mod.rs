@@ -39,6 +39,37 @@ impl Lexer {
         }
     }
 
+    /// Consumes the current character and returns a `token`.
+    fn single(&mut self, token: Token) -> Token {
+        self.advance();
+        token
+    }
+
+    /// Consumes the current character; if the next character is `second`, consumes that as well and returns `double`.
+    fn one_or_two(&mut self, second: char, double: Token, single: Token) -> Token {
+        self.advance();
+        if self.current() == Some(second) {
+            self.advance();
+            double
+        } else {
+            single
+        }
+    }
+
+    /// Reads all tokens, including the final EOF.
+    pub fn tokenize(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        loop {
+            let token = self.next_token();
+            let is_eof = token == Token::EOF;
+            tokens.push(token);
+            if is_eof {
+                break;
+            }
+        }
+        tokens
+    }
+
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -54,122 +85,45 @@ impl Lexer {
 
             Some(c) if c.is_alphabetic() || c == '_' => self.read_identifier_or_keyword(),
             Some(c) if c.is_ascii_digit() => self.read_number(),
-            Some('"') => self.read_string(),
-            Some(c) => {
-                let token = match c {
-                    '=' => {
-                        if self.peek() == Some('=') {
-                            self.advance();
-                            self.advance();
-                            Token::EqualEqual
-                        } else if self.peek() == Some('>') {
-                            self.advance();
-                            self.advance();
-                            Token::FatArrow
-                        } else {
-                            self.advance();
-                            Token::Equal
-                        }
-                    }
-                    '!' => {
-                        if self.peek() == Some('=') {
-                            self.advance();
-                            self.advance();
-                            Token::BangEqual
-                        } else {
-                            self.advance();
-                            Token::Bang
-                        }
-                    }
-                    '>' => {
-                        if self.peek() == Some('=') {
-                            self.advance();
-                            self.advance();
-                            Token::GreaterEqual
-                        } else {
-                            self.advance();
-                            Token::Greater
-                        }
-                    }
-                    '<' => {
-                        if self.peek() == Some('=') {
-                            self.advance();
-                            self.advance();
-                            Token::LessEqual
-                        } else {
-                            self.advance();
-                            Token::Less
-                        }
-                    }
-                    '-' => {
-                        if self.peek() == Some('>') {
-                            self.advance();
-                            self.advance();
-                            Token::Arrow
-                        } else {
-                            self.advance();
-                            Token::Minus
-                        }
-                    }
-                    '+' => {
-                        self.advance();
-                        Token::Plus
-                    }
-                    '*' => {
-                        self.advance();
-                        Token::Star
-                    }
-                    '/' => {
-                        self.advance();
-                        Token::Slash
-                    }
-                    '(' => {
-                        self.advance();
-                        Token::LParen
-                    }
-                    ')' => {
-                        self.advance();
-                        Token::RParen
-                    }
-                    '{' => {
-                        self.advance();
-                        Token::LBrace
-                    }
-                    '}' => {
-                        self.advance();
-                        Token::RBrace
-                    }
-                    '[' => {
-                        self.advance();
-                        Token::LBracket
-                    }
-                    ']' => {
-                        self.advance();
-                        Token::RBracket
-                    }
-                    ',' => {
-                        self.advance();
-                        Token::Comma
-                    }
-                    '.' => {
-                        self.advance();
-                        Token::Dot
-                    }
-                    ';' => {
-                        self.advance();
-                        Token::Semicolon
-                    }
-                    ':' => {
-                        self.advance();
-                        Token::Colon
-                    }
-                    _ => {
-                        self.advance();
-                        Token::EOF
-                    }
-                };
-                token
+            Some('"') => self.read_string('"'),
+            Some('\'') => self.read_string('\''),
+            Some('`') => self.read_template_string(),
+
+            Some('=') => {
+                self.advance();
+                match self.current() {
+                    Some('=') => self.single(Token::EqualEqual),
+                    Some('>') => self.single(Token::FatArrow),
+                    _ => Token::Equal,
+                }
             }
+            Some('-') => {
+                self.advance();
+                match self.current() {
+                    Some('>') => self.single(Token::Arrow),
+                    Some('=') => self.single(Token::MinusEqual),
+                    _ => Token::Minus,
+                }
+            }
+            Some('!') => self.one_or_two('=', Token::BangEqual, Token::Bang),
+            Some('>') => self.one_or_two('=', Token::GreaterEqual, Token::Greater),
+            Some('<') => self.one_or_two('=', Token::LessEqual, Token::Less),
+            Some('+') => self.one_or_two('=', Token::PlusEqual, Token::Plus),
+            Some('*') => self.one_or_two('=', Token::StarEqual, Token::Star),
+            Some('/') => self.one_or_two('=', Token::SlashEqual, Token::Slash),
+            Some('%') => self.single(Token::Percent),
+            Some('(') => self.single(Token::LParen),
+            Some(')') => self.single(Token::RParen),
+            Some('{') => self.single(Token::LBrace),
+            Some('}') => self.single(Token::RBrace),
+            Some('[') => self.single(Token::LBracket),
+            Some(']') => self.single(Token::RBracket),
+            Some(',') => self.single(Token::Comma),
+            Some('.') => self.single(Token::Dot),
+            Some(';') => self.single(Token::Semicolon),
+            Some(':') => self.single(Token::Colon),
+
+            Some(c) => self.single(Token::Illegal(c)),
             None => Token::EOF,
         }
     }
@@ -194,7 +148,10 @@ impl Lexer {
         while let Some(c) = self.current() {
             if c.is_ascii_digit() {
                 self.advance();
-            } else if c == '.' && !has_dot {
+            } else if c == '.'
+                && !has_dot
+                && self.peek().map_or(false, |next| next.is_ascii_digit())
+            {
                 has_dot = true;
                 self.advance();
             } else {
@@ -207,36 +164,60 @@ impl Lexer {
         Token::Number(number)
     }
 
-    fn read_string(&mut self) -> Token {
+    /// Reads a string delimited by `quote` (double or single quotes).
+    fn read_string(&mut self, quote: char) -> Token {
         self.advance();
         let mut result = String::new();
         while let Some(c) = self.current() {
+            if c == quote {
+                self.advance();
+                break;
+            }
+            if c == '\\' {
+                self.advance();
+                if let Some(esc) = self.current() {
+                    result.push(match esc {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        other => other,
+                    });
+                    self.advance();
+                }
+            } else {
+                result.push(c);
+                self.advance();
+            }
+        }
+        Token::StringLiteral(result)
+    }
+
+    /// Reads a template string between backticks. Stores the raw content (escapes and `${...}`
+    /// intact); the parser separates text and expressions.
+    fn read_template_string(&mut self) -> Token {
+        self.advance();
+        let mut raw = String::new();
+        while let Some(c) = self.current() {
             match c {
-                '"' => {
+                '`' => {
                     self.advance();
                     break;
                 }
                 '\\' => {
+                    raw.push(c);
                     self.advance();
-                    if let Some(esc) = self.current() {
-                        result.push(match esc {
-                            'n' => '\n',
-                            'r' => '\r',
-                            't' => '\t',
-                            '"' => '"',
-                            '\\' => '\\',
-                            other => other,
-                        });
+                    if let Some(next) = self.current() {
+                        raw.push(next);
                         self.advance();
                     }
                 }
                 other => {
-                    result.push(other);
+                    raw.push(other);
                     self.advance();
                 }
             }
         }
-        Token::StringLiteral(result)
+        Token::TemplateString(raw)
     }
 
     fn skip_line_comment(&mut self) {
