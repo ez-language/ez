@@ -1,15 +1,20 @@
+use std::rc::Rc;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
     Negate,
     Not,
+    BitNot,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinaryOperator {
     Add,
     Subtract,
     Multiply,
     Divide,
+    IntDivide,
+    Power,
     Modulo,
     Equal,
     NotEqual,
@@ -19,6 +24,42 @@ pub enum BinaryOperator {
     LessEqual,
     And,
     Or,
+    Is,
+    In,
+    BitAnd,
+    BitOr,
+    BitXor,
+    ShiftLeft,
+    ShiftRight,
+}
+
+impl BinaryOperator {
+    pub fn symbol(&self) -> &'static str {
+        match self {
+            BinaryOperator::Add => "+",
+            BinaryOperator::Subtract => "-",
+            BinaryOperator::Multiply => "*",
+            BinaryOperator::Divide => "/",
+            BinaryOperator::IntDivide => "//",
+            BinaryOperator::Power => "**",
+            BinaryOperator::Modulo => "%",
+            BinaryOperator::Equal => "==",
+            BinaryOperator::NotEqual => "!=",
+            BinaryOperator::Greater => ">",
+            BinaryOperator::GreaterEqual => ">=",
+            BinaryOperator::Less => "<",
+            BinaryOperator::LessEqual => "<=",
+            BinaryOperator::And => "and",
+            BinaryOperator::Or => "or",
+            BinaryOperator::Is => "is",
+            BinaryOperator::In => "in",
+            BinaryOperator::BitAnd => "&",
+            BinaryOperator::BitOr => "|",
+            BinaryOperator::BitXor => "^",
+            BinaryOperator::ShiftLeft => "<<",
+            BinaryOperator::ShiftRight => ">>",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,13 +69,39 @@ pub enum AssignOperator {
     Subtract,
     Multiply,
     Divide,
+    IntDivide,
+    Power,
+    Modulo,
 }
 
-/// Type written in the code: `int`, `string[]`, `Result`...
+impl AssignOperator {
+    /// The binary operator behind a compound assignment (`+=` → `+`).
+    pub fn binary(&self) -> Option<BinaryOperator> {
+        match self {
+            AssignOperator::Assign => None,
+            AssignOperator::Add => Some(BinaryOperator::Add),
+            AssignOperator::Subtract => Some(BinaryOperator::Subtract),
+            AssignOperator::Multiply => Some(BinaryOperator::Multiply),
+            AssignOperator::Divide => Some(BinaryOperator::Divide),
+            AssignOperator::IntDivide => Some(BinaryOperator::IntDivide),
+            AssignOperator::Power => Some(BinaryOperator::Power),
+            AssignOperator::Modulo => Some(BinaryOperator::Modulo),
+        }
+    }
+}
+
+/// Type written in the code: `int`, `string[]`, `Option[int]`, `(int) => int`...
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeExpr {
+    /// Plain or module-qualified name: `int`, `Person`, `math.Point`.
     Named(String),
+    /// `Option[int]`, `Result[int, string]`.
+    Generic(String, Vec<TypeExpr>),
     Array(Box<TypeExpr>),
+    Function {
+        params: Vec<TypeExpr>,
+        ret: Box<TypeExpr>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,6 +117,35 @@ pub struct Variant {
     pub fields: Vec<Field>,
 }
 
+/// Right-hand side of a `type` declaration.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeDef {
+    /// `{ Ok(value: string) Err(message: string) }`
+    Sum(Vec<Variant>),
+    /// `{ name: string  age: int }`
+    Shape(Vec<Field>),
+    /// `{ [key: string]: string }`
+    Index { key: TypeExpr, value: TypeExpr },
+    /// `Animal & { breed: string }`: a flat merge of the fields of every part.
+    Intersection(Vec<TypeDef>),
+    /// `type Age = int`
+    Alias(TypeExpr),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Param {
+    pub name: String,
+    pub ty: Option<TypeExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportKind {
+    /// `import math` / `import math from 'math.ez'`
+    Module(String),
+    /// `import { add, subtract } from 'math.ez'`
+    Names(Vec<String>),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     /// `_`
@@ -59,6 +155,8 @@ pub enum Pattern {
     Identifier(String),
     /// `Ok(value)`, `Rectangle(width, height)`, with nested patterns.
     Variant { name: String, args: Vec<Pattern> },
+    /// `0`, `'yes'`, `true`
+    Literal(AstNode),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,14 +173,22 @@ pub enum TemplatePart {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ObjectEntry {
+    pub key: String,
+    pub value: AstNode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
     // Expressions
-    NumberLiteral(f64),
+    IntLiteral(i64),
+    FloatLiteral(f64),
     StringLiteral(String),
     TemplateString(Vec<TemplatePart>),
     BooleanLiteral(bool),
-    NullLiteral,
     ArrayLiteral(Vec<AstNode>),
+    /// `{ name: 'Ana', age: 30 }` or `{ 'hello': 'olá' }`
+    ObjectLiteral(Vec<ObjectEntry>),
     Identifier(String),
     Unary {
         op: UnaryOperator,
@@ -115,6 +221,12 @@ pub enum AstNode {
         scrutinee: Box<AstNode>,
         arms: Vec<MatchArm>,
     },
+    /// Anonymous function: `(x: int): int => { ... }` or `(x: int) => x * 2`.
+    Lambda {
+        params: Vec<Param>,
+        return_type: Option<TypeExpr>,
+        body: Rc<AstNode>,
+    },
     Block(Vec<AstNode>),
 
     // Statements
@@ -129,6 +241,7 @@ pub enum AstNode {
     },
     Break,
     Continue,
+    Return(Option<Box<AstNode>>),
     Assign {
         target: Box<AstNode>,
         op: AssignOperator,
@@ -140,8 +253,37 @@ pub enum AstNode {
         value: Box<AstNode>,
         is_const: bool,
     },
+    FunctionDecl {
+        name: String,
+        params: Vec<Param>,
+        return_type: Option<TypeExpr>,
+        body: Rc<AstNode>,
+    },
     TypeDecl {
         name: String,
-        variants: Vec<Variant>,
+        definition: TypeDef,
     },
+    InterfaceDecl {
+        name: String,
+        fields: Vec<Field>,
+    },
+    Import {
+        kind: ImportKind,
+        path: String,
+    },
+    /// Statement annotated with the source line where it starts (used in error messages).
+    Located {
+        line: usize,
+        node: Box<AstNode>,
+    },
+}
+
+impl AstNode {
+    /// Removes the `Located` wrappers, returning the node itself.
+    pub fn unlocated(&self) -> &AstNode {
+        match self {
+            AstNode::Located { node, .. } => node.unlocated(),
+            other => other,
+        }
+    }
 }

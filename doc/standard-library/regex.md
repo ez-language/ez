@@ -15,7 +15,7 @@ import regex
 Checks if the string fully matches the regex pattern.
 
 ```ez
-regex.match(pattern: string, input: string) -> bool
+regex.match(pattern: string, input: string) -> boolean
 ```
 
 **Example:**
@@ -32,17 +32,17 @@ regex.match('^[a-z]+$', '123') // false
 Finds the first substring that matches the regex pattern.
 
 ```ez
-regex.search(pattern: string, input: string) -> Option<Match>
+regex.search(pattern: string, input: string) -> Option[Match]
 ```
 
-Returns Some(Match) if found, or None if no match is found.
+Returns Some(Match) if found, or None if no match is found. Inside `if (result is Some) { ... }`, the match is available as `result.value`.
 
 **Example:**
 
 ```ez
 result = regex.search('[0-9]+', 'Order number: 12345')
 
-if result is Some {
+if (result is Some) {
 	print(result.value.value) // 12345
 }
 ```
@@ -54,7 +54,7 @@ if result is Some {
 Finds all matches in the string.
 
 ```ez
-regex.findAll(pattern: string, input: string) -> array<Match>
+regex.findAll(pattern: string, input: string) -> Match[]
 ```
 
 **Example:**
@@ -106,12 +106,12 @@ Match {
 ```ez
 result = regex.search('abc', '123abc456')
 
-if result is Some {
-	match = result.value
+if (result is Some) {
+	found = result.value
 
-	print(match.value) // abc
-	print(match.start) // 3
-	print(match.end) // 6
+	print(found.value) // abc
+	print(found.start) // 3
+	print(found.end) // 6
 }
 ```
 
@@ -119,5 +119,6 @@ if result is Some {
 
 ## Notes
 
--   The regex syntax follows the PCRE (Perl Compatible Regular Expressions) standard.
+-   The regex syntax is Perl-style (character classes, groups, quantifiers, anchors). Look-around and backreferences are not supported.
+-   `start` and `end` are character positions (`end` is exclusive).
 -   To learn more about regex syntax, visit: [https://regex101.com/](https://regex101.com/)

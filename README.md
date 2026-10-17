@@ -24,6 +24,26 @@ The goal is to provide a language that any developer can quickly learn and use c
 
 ---
 
+## Getting Started
+
+ez is implemented in Rust. With [Rust](https://www.rust-lang.org/tools/install) installed:
+
+```sh
+cargo build --release
+
+# check and run a program
+./target/release/ez examples/hello.ez
+
+# only check syntax and types
+./target/release/ez check examples/hello.ez
+```
+
+Programs are type-checked before they run, so type errors (wrong argument types, missing match arms, assignments to `const` values...) are reported without executing any code. Programs currently run on an interpreter; compiling to native binaries is on the [roadmap](doc/roadmap.md).
+
+Run the test suite with `cargo test`.
+
+---
+
 ## Documentation
 
 Access the documentation [here](doc/README.md).

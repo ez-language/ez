@@ -7,10 +7,18 @@
 | `+`      | Addition or concat                |
 | `-`      | Subtraction                       |
 | `*`      | Multiplication                    |
-| `/`      | Division (floating-point)         |
+| `/`      | Division (always returns a float) |
 | `//`     | Integer Division (floor division) |
 | `**`     | Exponentiation                    |
 | `%`      | Modulus (remainder)               |
+
+`//` is also the start of a comment. It is read as integer division only when it comes right after a value on the same line **and** is immediately followed by a non-space character (or by `=`, for `//=`):
+
+```ez
+x = 7 //2     // 3
+x //= 2       // 1
+y = 7 // 2    // y is 7 — `// 2` is a comment
+```
 
 ## Comparison Operators
 
@@ -41,6 +49,17 @@ a is b  // false — different objects in memory
 
 ```ez
 'a' in 'banana'  // true
+2 in [1, 2, 3]   // true
+```
+
+`is` also checks the variant of a sum type value:
+
+```ez
+result = Some(1)
+
+if (result is Some) {
+	print(result.value) // 1
+}
 ```
 
 ## Logical Operators

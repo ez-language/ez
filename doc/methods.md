@@ -4,17 +4,26 @@
 
 | Method      | Description                                | Example            |
 | ----------- | ------------------------------------------ | ------------------ |
-| `int(x)`    | convert the value of a variable to integer | `int('0') → 0`     |
-| `float(x)`  | convert the value of a variable to float   | `float('0') → 0.0` |
+| `int(x)`    | convert the value of a variable to integer | `int(3.9) → 3`     |
+| `float(x)`  | convert the value of a variable to float   | `float(2) → 2.0`   |
 | `string(x)` | convert the value of a variable to string  | `string(0) → '0'`  |
+
+Converting a `string` can fail, so `int(x)` and `float(x)` return a `Result` when `x` is a string:
+`Ok(value)` on success or `Err(message)` otherwise.
 
 Examples:
 
 -  `int(x)`:
 
 ```ez
-int('0') // 0
-int('abc') // Result[int, string] → Err('not a valid int')   
+int(3.9) // 3
+int('0') // Result[int, string] → Ok(0)
+int('abc') // Result[int, string] → Err('not a valid int')
+
+match (int('42')) {
+	Ok(value) => print(value + 1) // 43
+	Err(error) => print(error)
+}
 ```
 
 ## String Methods

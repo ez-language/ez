@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+regex = "1"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+[[test]]
+name = "lexer"
+path = "test/lexer.rs"
+
+[[test]]
+name = "language"
+path = "test/language.rs"

@@ -1,12 +1,16 @@
 pub mod token;
 pub mod keywords;
 
-use token::Token;
+use token::{SpannedToken, Token};
 use keywords::lookup_ident;
 
 pub struct Lexer {
     input: Vec<char>,
     position: usize,
+    line: usize,
+    column: usize,
+    /// Last token produced and the line it was on (used to disambiguate `//`).
+    previous: Option<(Token, usize)>,
 }
 
 impl Lexer {
@@ -14,6 +18,9 @@ impl Lexer {
         Lexer {
             input: input.chars().collect(),
             position: 0,
+            line: 1,
+            column: 1,
+            previous: None,
         }
     }
 
@@ -25,7 +32,19 @@ impl Lexer {
         self.input.get(self.position + 1).copied()
     }
 
+    fn peek_at(&self, offset: usize) -> Option<char> {
+        self.input.get(self.position + offset).copied()
+    }
+
     fn advance(&mut self) {
+        if let Some(c) = self.current() {
+            if c == '\n' {
+                self.line += 1;
+                self.column = 1;
+            } else {
+                self.column += 1;
+            }
+        }
         self.position += 1;
     }
 
@@ -58,10 +77,18 @@ impl Lexer {
 
     /// Reads all tokens, including the final EOF.
     pub fn tokenize(&mut self) -> Vec<Token> {
+        self.tokenize_spanned()
+            .into_iter()
+            .map(|spanned| spanned.token)
+            .collect()
+    }
+
+    /// Reads all tokens with their positions, including the final EOF.
+    pub fn tokenize_spanned(&mut self) -> Vec<SpannedToken> {
         let mut tokens = Vec::new();
         loop {
-            let token = self.next_token();
-            let is_eof = token == Token::EOF;
+            let token = self.next_spanned();
+            let is_eof = token.token == Token::EOF;
             tokens.push(token);
             if is_eof {
                 break;
@@ -71,18 +98,54 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> Token {
-        self.skip_whitespace();
+        self.next_spanned().token
+    }
 
-        match self.current() {
-            Some('/') if self.peek() == Some('/') => {
-                self.skip_line_comment();
-                self.next_token()
-            }
-            Some('/') if self.peek() == Some('*') => {
+    fn next_spanned(&mut self) -> SpannedToken {
+        loop {
+            self.skip_whitespace();
+            if self.current() == Some('/') && self.peek() == Some('*') {
                 self.skip_block_comment();
-                self.next_token()
+            } else if self.current() == Some('/')
+                && self.peek() == Some('/')
+                && self.is_line_comment()
+            {
+                self.skip_line_comment();
+            } else {
+                break;
             }
+        }
 
+        let line = self.line;
+        let column = self.column;
+        let token = self.read_token();
+        self.previous = Some((token.clone(), line));
+        SpannedToken {
+            token,
+            line,
+            column,
+        }
+    }
+
+    /// `//` is a comment unless it directly follows an operand on the same line and is
+    /// immediately followed by a non-space character (`a //b`, `a//b`) or by `=` (`a //= b`).
+    fn is_line_comment(&self) -> bool {
+        let after_operand = match &self.previous {
+            Some((token, line)) => *line == self.line && token.ends_operand(),
+            None => false,
+        };
+        if !after_operand {
+            return true;
+        }
+        match self.peek_at(2) {
+            Some('=') => false,
+            Some(c) => c.is_whitespace(),
+            None => true,
+        }
+    }
+
+    fn read_token(&mut self) -> Token {
+        match self.current() {
             Some(c) if c.is_alphabetic() || c == '_' => self.read_identifier_or_keyword(),
             Some(c) if c.is_ascii_digit() => self.read_number(),
             Some('"') => self.read_string('"'),
@@ -105,13 +168,45 @@ impl Lexer {
                     _ => Token::Minus,
                 }
             }
+            Some('*') => {
+                self.advance();
+                match self.current() {
+                    Some('*') => self.one_or_two('=', Token::StarStarEqual, Token::StarStar),
+                    Some('=') => self.single(Token::StarEqual),
+                    _ => Token::Star,
+                }
+            }
+            Some('/') => {
+                self.advance();
+                match self.current() {
+                    Some('/') => self.one_or_two('=', Token::SlashSlashEqual, Token::SlashSlash),
+                    Some('=') => self.single(Token::SlashEqual),
+                    _ => Token::Slash,
+                }
+            }
+            Some('>') => {
+                self.advance();
+                match self.current() {
+                    Some('=') => self.single(Token::GreaterEqual),
+                    Some('>') => self.single(Token::ShiftRight),
+                    _ => Token::Greater,
+                }
+            }
+            Some('<') => {
+                self.advance();
+                match self.current() {
+                    Some('=') => self.single(Token::LessEqual),
+                    Some('<') => self.single(Token::ShiftLeft),
+                    _ => Token::Less,
+                }
+            }
             Some('!') => self.one_or_two('=', Token::BangEqual, Token::Bang),
-            Some('>') => self.one_or_two('=', Token::GreaterEqual, Token::Greater),
-            Some('<') => self.one_or_two('=', Token::LessEqual, Token::Less),
             Some('+') => self.one_or_two('=', Token::PlusEqual, Token::Plus),
-            Some('*') => self.one_or_two('=', Token::StarEqual, Token::Star),
-            Some('/') => self.one_or_two('=', Token::SlashEqual, Token::Slash),
-            Some('%') => self.single(Token::Percent),
+            Some('%') => self.one_or_two('=', Token::PercentEqual, Token::Percent),
+            Some('&') => self.single(Token::Ampersand),
+            Some('|') => self.single(Token::Pipe),
+            Some('^') => self.single(Token::Caret),
+            Some('~') => self.single(Token::Tilde),
             Some('(') => self.single(Token::LParen),
             Some(')') => self.single(Token::RParen),
             Some('{') => self.single(Token::LBrace),
@@ -160,8 +255,12 @@ impl Lexer {
         }
 
         let num_str: String = self.input[start..self.position].iter().collect();
-        let number = num_str.parse::<f64>().unwrap_or(0.0);
-        Token::Number(number)
+        if !has_dot {
+            if let Ok(value) = num_str.parse::<i64>() {
+                return Token::Int(value);
+            }
+        }
+        Token::Float(num_str.parse::<f64>().unwrap_or(0.0))
     }
 
     /// Reads a string delimited by `quote` (double or single quotes).
@@ -180,6 +279,7 @@ impl Lexer {
                         'n' => '\n',
                         'r' => '\r',
                         't' => '\t',
+                        '0' => '\0',
                         other => other,
                     });
                     self.advance();
@@ -241,5 +341,86 @@ impl Lexer {
             }
             self.advance();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lex(source: &str) -> Vec<Token> {
+        Lexer::new(source).tokenize()
+    }
+
+    #[test]
+    fn integers_and_floats_are_distinct() {
+        assert_eq!(lex("42 2.5"), vec![Token::Int(42), Token::Float(2.5), Token::EOF]);
+    }
+
+    #[test]
+    fn comment_after_code_is_skipped() {
+        assert_eq!(
+            lex("print(x) // 1 (comment)"),
+            vec![
+                Token::Identifier("print".to_string()),
+                Token::LParen,
+                Token::Identifier("x".to_string()),
+                Token::RParen,
+                Token::EOF
+            ]
+        );
+    }
+
+    #[test]
+    fn integer_division_without_space() {
+        assert_eq!(
+            lex("a //b"),
+            vec![
+                Token::Identifier("a".to_string()),
+                Token::SlashSlash,
+                Token::Identifier("b".to_string()),
+                Token::EOF
+            ]
+        );
+        assert_eq!(
+            lex("a //= 2"),
+            vec![
+                Token::Identifier("a".to_string()),
+                Token::SlashSlashEqual,
+                Token::Int(2),
+                Token::EOF
+            ]
+        );
+    }
+
+    #[test]
+    fn comment_at_start_of_line() {
+        assert_eq!(lex("a\n//b"), vec![Token::Identifier("a".to_string()), Token::EOF]);
+    }
+
+    #[test]
+    fn multi_character_operators() {
+        assert_eq!(
+            lex("** **= << >> & | ^ ~ %="),
+            vec![
+                Token::StarStar,
+                Token::StarStarEqual,
+                Token::ShiftLeft,
+                Token::ShiftRight,
+                Token::Ampersand,
+                Token::Pipe,
+                Token::Caret,
+                Token::Tilde,
+                Token::PercentEqual,
+                Token::EOF
+            ]
+        );
+    }
+
+    #[test]
+    fn tokens_have_positions() {
+        let tokens = Lexer::new("a\n  b").tokenize_spanned();
+        assert_eq!((tokens[0].line, tokens[0].column), (1, 1));
+        assert_eq!((tokens[1].line, tokens[1].column), (2, 3));
     }
 }

@@ -7,10 +7,10 @@ This document outlines the planned features and milestones for the ez programmin
 ## Short-term
 
 -   [x] Define core syntax
--   [ ] Implement basic type system (primitive and custom types)
--   [ ] Support built-in functions: `print()`, `input()`
--   [ ] String interpolation
--   [ ] Basic `for` loop with `range()`
+-   [x] Implement basic type system (primitive and custom types)
+-   [x] Support built-in functions: `print()`, `input()`
+-   [x] String interpolation
+-   [x] Basic `for` loop with `range()`
 -   [x] Organize and write initial documentation
 
 ---
@@ -18,8 +18,8 @@ This document outlines the planned features and milestones for the ez programmin
 ## Mid-term
 
 -   [ ] Create a working compiler targeting native binaries
--   [ ] Add type-safe standard library
--   [ ] Implement control flow expansions: `if`, `match`, `while`, `break`, `continue`
+-   [x] Add type-safe standard library
+-   [x] Implement control flow expansions: `if`, `match`, `while`, `break`, `continue`
 -   [ ] Enable method definitions on custom types (e.g. `Type.method()`)
 -   [ ] Introduce error handling model (`try`, `catch` or equivalent)
 
