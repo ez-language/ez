@@ -8,11 +8,13 @@
 age: int = 23
 ```
 
--   `float`: floating-point numbers.
+-   `float`: floating-point numbers. A `float` is always a finite real number: there is no NaN and no infinity.
 
 ```ez
 const pi: float = 3.14
 ```
+
+When a numeric result does not fit in an `int` or a `float` (a representation limit), the program panics. For example, `9223372036854775807 + 1` and `1e308 * 10` stop the program. Results that do not exist in the real numbers (a domain problem, like the square root of a negative number) are reported by the `math` functions as a `MathError` (see [math](standard-library/math.md)).
 
 ## Text Types
 

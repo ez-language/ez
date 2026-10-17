@@ -187,6 +187,17 @@ type MathError = {
 -   `float('1e400')` returns `Err(OutOfRange(...))`.
 -   `MathError` only describes **domain** problems (the result does not exist in the reals). Overflow is a **representation** limit (the result exists but does not fit), so it does not belong to `MathError`.
 
+### Representation limits panic, domain problems are `MathError`
+
+One rule decides how numeric failures are reported:
+
+| Problem | Meaning | Handling | Examples |
+| --- | --- | --- | --- |
+| **Representation limit** | The result exists but does not fit in an `int` or a `float` | panic | `9223372036854775807 + 1`, `1e308 * 10`, `math.pow(10, 400)`, `math.round(1e300)` |
+| **Domain problem** | The result does not exist in the real numbers | `Err(MathError)` | `math.sqrt(-1)` → `Complex`, `math.pow(0, 0)` → `Indeterminate` |
+
+Operators cannot return a `Result`, so they always panic, including on domain problems such as division by zero.
+
 ### Division (already implemented)
 
 Like Go and Rust: `int / int` gives an `int` truncated toward zero, a division with a `float` gives a `float`, and `%` has the sign of the dividend. `//` is always a comment.
@@ -271,4 +282,4 @@ Notes:
     -   `file.open(path, mode)` with `type Mode = { Read  Write  Append }` instead of `'r'`, `'w'`, `'a'`. Reading a file opened for writing, or using a closed file, panics.
     -   `regex.compile(pattern) -> Result[Regex, RegexError]`, with infallible methods on `Regex`.
     -   A `.message()` method on every standard library error type, returning a human-readable text.
-8.  **Overflow in `math.pow`**: recommended to panic, consistent with the operators (representation limits panic, domain problems are `MathError`).
+8.  **`math.pow(0, y)` with a negative `y`**: the result is not a real number (like `1 / 0`), but it is neither `Complex` nor `Indeterminate`. Options: panic, as division by zero; or a new `MathError` variant such as `Undefined`.

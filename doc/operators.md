@@ -23,6 +23,8 @@ Division follows the type of the operands, as in Go and Rust: dividing two `int`
 
 `//` is always a comment (see [Comments](comments.md)).
 
+Operators cannot return a `Result`, so an invalid arithmetic operation panics: division by zero, and results that do not fit in an `int` or a `float` (overflow).
+
 ## Comparison Operators
 
 | Operator | Description                                                |
