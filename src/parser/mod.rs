@@ -227,7 +227,10 @@ impl Parser {
             Token::While => self.parse_while(),
             Token::For => self.parse_for(),
             Token::Type => self.parse_type_declaration(),
-            Token::Interface => self.parse_interface(),
+            Token::Interface => self.error_here(
+                "'interface' is a reserved word; to describe the shape of a value, use 'type'"
+                    .to_string(),
+            ),
             Token::Import => self.parse_import(),
             Token::Export => {
                 self.error_here("'export' is only allowed at the top level of a file".to_string())
@@ -512,16 +515,16 @@ impl Parser {
         })
     }
 
-    /// `export function`, `export const`, `export var`, `export type` or `export interface`.
+    /// `export function`, `export const`, `export var` or `export type`.
     fn parse_export(&mut self) -> Result<AstNode, EzError> {
         let line = self.current_line();
         self.advance(); // export
         if !matches!(
             self.current(),
-            Token::Func | Token::Const | Token::Var | Token::Type | Token::Interface
+            Token::Func | Token::Const | Token::Var | Token::Type
         ) {
             return self.error_here(format!(
-                "expected 'function', 'const', 'var', 'type' or 'interface' after 'export', found {:?}",
+                "expected 'function', 'const', 'var' or 'type' after 'export', found {:?}",
                 self.current()
             ));
         }
@@ -572,14 +575,6 @@ impl Parser {
             }
             other => self.error_here(format!("expected {}, found {:?}", description, other)),
         }
-    }
-
-    fn parse_interface(&mut self) -> Result<AstNode, EzError> {
-        self.advance(); // interface
-        let name = self.expect_identifier("interface name")?;
-        self.expect(Token::LBrace, "'{' after the interface name")?;
-        let fields = self.parse_fields()?;
-        Ok(AstNode::InterfaceDecl { name, fields })
     }
 
     /// Fields `name: type` separated by newlines or commas, up to and including `}`.
@@ -1627,14 +1622,13 @@ mod tests {
         let program = parse_program_str(
             "type Person = { name: string  age: int }\n\
              type Dictionary = { [key: string]: string }\n\
-             type Dog = Animal & { breed: string }\n\
-             interface User { id: int }",
+             type Dog = Animal & { breed: string }",
         )
         .unwrap();
         assert!(matches!(&program[0], AstNode::TypeDecl { definition: TypeDef::Shape(fields), .. } if fields.len() == 2));
         assert!(matches!(&program[1], AstNode::TypeDecl { definition: TypeDef::Index { .. }, .. }));
         assert!(matches!(&program[2], AstNode::TypeDecl { definition: TypeDef::Intersection(parts), .. } if parts.len() == 2));
-        assert!(matches!(&program[3], AstNode::InterfaceDecl { .. }));
+        assert!(parse_program_str("interface User { id: int }").is_err());
         assert!(parse_program_str("type Result = string | int").is_err());
     }
 

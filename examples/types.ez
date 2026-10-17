@@ -1,4 +1,4 @@
-interface Product {
+type Product = {
     id: int
     name: string
     price: float

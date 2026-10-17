@@ -81,7 +81,7 @@ type JsonObject = {
 
 Everything in a module is private by default. Only declarations marked with `export` can be imported.
 
--   Exportable: `export function`, `export const`, `export var`, `export type` and `export interface`.
+-   Exportable: `export function`, `export const`, `export var` and `export type`.
 -   Exporting a sum type also exports its variants.
 -   `export` is only allowed at the top level of a file.
 -   Implicit declarations (`x = 1`) cannot be exported.
@@ -110,6 +110,12 @@ Everything in a module is private by default. Only declarations marked with `exp
 -   A public signature cannot use a private type (e.g. `export function f(): Helper` with a private `Helper`).
 -   The standard library is unaffected: all of its members are public.
 -   Later: re-exports (`export { add } from 'math.ez'`).
+
+### No `interface`
+
+`type` covers what interfaces did: shape types describe the fields of a value. Shape types are **nominal**: two types with the same fields are different types (`Celsius` and `Fahrenheit` do not mix), and an object literal is accepted by any type whose fields it matches.
+
+`interface` stays a reserved word, as a precaution, in case behavior contracts (e.g. constraints on generic types) are ever needed. Until then, generics have no constraints: `==` works on every type, and behavior is passed as functions (e.g. `sort(items, (a, b) => a.age < b.age)`).
 
 ### No `try` / `catch`
 
@@ -210,7 +216,7 @@ Like Go and Rust: `int / int` gives an `int` truncated toward zero, a division w
 
 A compiler is a large program, with many data structures and many operations that can fail. These features are needed before writing `ezc` in ez, in order of importance:
 
-1.  **User-defined generics**: `type Map[K, V]`, `function find[T](...)`, using the same bracket syntax as `Option[T]`.
+1.  **User-defined generics**: `type Map[K, V]`, `function find[T](...)`, using the same bracket syntax as `Option[T]`. Without constraints (see [No `interface`](#no-interface)).
 2.  **Collections**:
     -   lists with `push`, `pop`, `insert` and slicing;
     -   maps with any comparable key type (index signatures only allow `string` keys today);

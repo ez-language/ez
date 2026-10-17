@@ -20,7 +20,7 @@ pub enum Type {
         params: Vec<Type>,
         ret: Box<Type>,
     },
-    /// Declared type (sum type, shape, interface, index signature or built-in object).
+    /// Declared type (sum type, shape, index signature or built-in object).
     Named {
         id: TypeId,
         args: Vec<Type>,
@@ -108,8 +108,6 @@ pub enum TypeKind {
     Sum(Vec<VariantDef>),
     /// Nominal type with fixed fields.
     Shape(Vec<(String, Type)>),
-    /// Structural type: any value with exactly the same fields is accepted.
-    Interface(Vec<(String, Type)>),
     /// Index signature: `{ [key: string]: T }`.
     Dict { key: Type, value: Type },
     /// Built-in object (`File`, `DateTime`...): read-only fields and methods.
@@ -153,7 +151,6 @@ impl TypeTable {
             Type::Record(fields) => Some(fields.clone()),
             Type::Named { id, args } => match &self.get(*id).kind {
                 TypeKind::Shape(fields)
-                | TypeKind::Interface(fields)
                 | TypeKind::Builtin { fields, .. } => Some(
                     fields
                         .iter()

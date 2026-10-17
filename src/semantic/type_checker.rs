@@ -151,7 +151,6 @@ fn is_statement(node: &AstNode) -> bool {
             | AstNode::VarDecl { .. }
             | AstNode::FunctionDecl { .. }
             | AstNode::TypeDecl { .. }
-            | AstNode::InterfaceDecl { .. }
             | AstNode::Import { .. }
     )
 }
@@ -450,7 +449,7 @@ impl Checker {
             };
             let is_type = matches!(
                 statement.unlocated(),
-                AstNode::TypeDecl { .. } | AstNode::InterfaceDecl { .. }
+                AstNode::TypeDecl { .. }
             );
             if !statement.is_exported() {
                 module.private.insert(name.to_string());
@@ -496,7 +495,7 @@ impl Checker {
                         TypeKind::Sum(variants) => types.extend(
                             variants.iter().flat_map(|v| v.fields.iter().map(|(_, t)| t.clone())),
                         ),
-                        TypeKind::Shape(fields) | TypeKind::Interface(fields) => {
+                        TypeKind::Shape(fields) => {
                             types.extend(fields.iter().map(|(_, t)| t.clone()))
                         }
                         TypeKind::Dict { value, .. } => types.push(value.clone()),
@@ -653,11 +652,8 @@ impl Checker {
                 },
             ) => e == a && ev == av && ea.iter().zip(aa).all(|(x, y)| self.assignable(x, y)),
             (Type::Named { id, .. }, actual) => match &self.table.get(*id).kind {
-                // Interfaces are structural: any value with the same shape is accepted.
-                TypeKind::Interface(fields) => match self.table.fields_of(actual) {
-                    Some(actual_fields) => self.same_fields(fields, &actual_fields),
-                    None => false,
-                },
+                // Shapes are nominal: only an object literal with the same fields (or a value of
+                // the same type, handled above) is accepted.
                 TypeKind::Shape(fields) => match actual {
                     Type::Record(actual_fields) => self.same_fields(fields, actual_fields),
                     _ => false,
@@ -805,7 +801,7 @@ impl Checker {
                     self.check_type_name_free(name)?;
                     pending.push((statement, None));
                 }
-                AstNode::TypeDecl { name, .. } | AstNode::InterfaceDecl { name, .. } => {
+                AstNode::TypeDecl { name, .. } => {
                     self.check_type_name_free(name)?;
                     let id = self.table.add(name, 0, TypeKind::Pending);
                     self.current_scope()
@@ -840,10 +836,6 @@ impl Checker {
                         self.declare_constructors_into(&mut scope, id);
                         *self.current_scope() = scope;
                     }
-                }
-                (AstNode::InterfaceDecl { fields, .. }, Some(id)) => {
-                    let fields = self.resolve_fields(fields)?;
-                    self.table.types[id].kind = TypeKind::Interface(fields);
                 }
                 _ => {}
             }
@@ -914,7 +906,7 @@ impl Checker {
                 let mut merged: Vec<(String, Type)> = Vec::new();
                 for part in parts {
                     let fields = match self.resolve_type_def(name, part)? {
-                        TypeKind::Shape(fields) | TypeKind::Interface(fields) => fields,
+                        TypeKind::Shape(fields) => fields,
                         _ => {
                             return self.err(format!(
                                 "only types with fields can be merged with '&' (in '{}')",
@@ -1073,7 +1065,7 @@ impl Checker {
                 self.check_function(name, params, signature, body)?;
                 Ok(Type::Void)
             }
-            AstNode::TypeDecl { .. } | AstNode::InterfaceDecl { .. } => Ok(Type::Void),
+            AstNode::TypeDecl { .. } => Ok(Type::Void),
             AstNode::Import { kind, path } => {
                 self.check_import(kind, path)?;
                 Ok(Type::Void)
@@ -1847,7 +1839,7 @@ impl Checker {
             _ => None,
         });
         match target {
-            Some((ty, TypeKind::Shape(fields))) | Some((ty, TypeKind::Interface(fields))) => {
+            Some((ty, TypeKind::Shape(fields))) => {
                 let type_name = self.show(&ty);
                 for entry in entries {
                     match fields.iter().find(|(n, _)| *n == entry.key) {

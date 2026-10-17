@@ -259,10 +259,6 @@ pub enum AstNode {
         name: String,
         definition: TypeDef,
     },
-    InterfaceDecl {
-        name: String,
-        fields: Vec<Field>,
-    },
     Import {
         kind: ImportKind,
         path: String,
@@ -294,13 +290,12 @@ impl AstNode {
         }
     }
 
-    /// Name declared by a function, variable, type or interface declaration.
+    /// Name declared by a function, variable or type declaration.
     pub fn declared_name(&self) -> Option<&str> {
         match self.unlocated() {
             AstNode::FunctionDecl { name, .. }
             | AstNode::VarDecl { name, .. }
-            | AstNode::TypeDecl { name, .. }
-            | AstNode::InterfaceDecl { name, .. } => Some(name),
+            | AstNode::TypeDecl { name, .. } => Some(name),
             _ => None,
         }
     }

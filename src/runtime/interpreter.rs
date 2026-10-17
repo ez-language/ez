@@ -231,7 +231,6 @@ impl Interpreter {
                 | AstNode::VarDecl { .. }
                 | AstNode::FunctionDecl { .. }
                 | AstNode::TypeDecl { .. }
-                | AstNode::InterfaceDecl { .. }
                 | AstNode::Import { .. },
             ) => Ok(Value::Void),
             _ => Ok(last),
@@ -270,8 +269,8 @@ impl Interpreter {
                     if module.env.get_local(name).is_some() {
                         env.alias(name, &module.env);
                     }
-                    // Importing a sum type also imports its variants. Interfaces, shapes and
-                    // aliases have no runtime value.
+                    // Importing a sum type also imports its variants. Shapes and aliases have
+                    // no runtime value.
                     let types = module.types.borrow();
                     if let Some(sum) = types.iter().find(|sum| sum.name == *name) {
                         for (variant, _) in &sum.variants {
@@ -456,7 +455,7 @@ impl Interpreter {
                 env.define(name, coerce(value, is_float_type(ty)));
                 Ok(Value::Void)
             }
-            AstNode::FunctionDecl { .. } | AstNode::TypeDecl { .. } | AstNode::InterfaceDecl { .. } => {
+            AstNode::FunctionDecl { .. } | AstNode::TypeDecl { .. } => {
                 Ok(Value::Void)
             }
             AstNode::Import { kind, path } => {

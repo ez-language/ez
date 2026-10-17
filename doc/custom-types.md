@@ -16,6 +16,47 @@ person: Person = {
 }
 ```
 
+Shape types can be nested, and used for variables, function parameters and return types:
+
+```ez
+type Address = {
+    street: string
+    city: string
+}
+
+type User = {
+    id: int
+    name: string
+    address: Address
+}
+
+user: User = {
+    id: 42
+    name: 'Bob'
+    address: {
+        street: '123 Main St'
+        city: 'Exampleville'
+    }
+}
+
+function printUser(user: User) {
+    print(`${user.name} lives in ${user.address.city}`)
+}
+```
+
+All fields are required, and an object literal cannot have extra fields. Fields can be separated by commas or new lines.
+
+Shape types are **nominal**: two types with the same fields are still different types. An object literal is accepted by any type whose fields it matches.
+
+```ez
+type Celsius = { value: float }
+type Fahrenheit = { value: float }
+
+const c: Celsius = { value: 20.0 }
+f: Fahrenheit = c // Error! Celsius is not Fahrenheit
+g: Fahrenheit = { value: 68.0 } // Ok
+```
+
 ## Index Signatures
 
 Types with dynamic keys, where keys follow a pattern and point to values ​​of the same type.

@@ -677,18 +677,18 @@ fn type_intersection_and_no_subtyping() {
 }
 
 // ---------------------------------------------------------------------------
-// Interfaces
+// Nested shapes and nominal typing
 // ---------------------------------------------------------------------------
 
 #[test]
-fn interfaces() {
+fn nested_shapes() {
     let source = r#"
-        interface Address {
+        type Address = {
             street: string
             city: string
         }
 
-        interface User {
+        type User = {
             id: int
             name: string
             address: Address
@@ -703,7 +703,7 @@ fn interfaces() {
             }
         }
 
-        interface Product {
+        type Product = {
             id: int
             name: string
             price: float
@@ -713,25 +713,29 @@ fn interfaces() {
             print(`Product: ${product.name} (${product.id}) - ${product.price}`)
         }
 
-        type Item = {
-            id: int
-            name: string
-            price: float
-        }
-        const item: Item = { id: 2, name: 'Cup', price: 3.5 }
-
         print(user.address.city)
         printProduct({ id: 1, name: 'Pen', price: 2.5 })
-        printProduct(item) // structural: Item has the same shape as Product
     "#;
-    assert_eq!(
-        run(source),
-        "Exampleville\nProduct: Pen (1) - 2.5\nProduct: Cup (2) - 3.5\n"
-    );
-    assert_error(
-        "interface U { id: int }\nu: U = { id: 1, extra: true }",
-        "has no field 'extra'",
-    );
+    assert_eq!(run(source), "Exampleville\nProduct: Pen (1) - 2.5\n");
+    assert_error("type U = { id: int }\nu: U = { id: 1, extra: true }", "has no field 'extra'");
+}
+
+#[test]
+fn shapes_are_nominal() {
+    // Two types with the same fields are still different types.
+    let source = r#"
+        type Celsius = { value: float }
+        type Fahrenheit = { value: float }
+        const c: Celsius = { value: 20.0 }
+        f: Fahrenheit = c
+    "#;
+    assert_error(source, "cannot assign a value of type Celsius to 'f' of type Fahrenheit");
+}
+
+#[test]
+fn interface_is_reserved() {
+    assert_error("interface User { id: int }", "'interface' is a reserved word");
+    assert_error("interface = 1", "'interface' is a reserved word");
 }
 
 // ---------------------------------------------------------------------------
@@ -870,7 +874,7 @@ fn modules_and_imports() {
 #[test]
 fn export_rules() {
     assert_error("function f() {\n export const x = 1\n}", "only allowed at the top level");
-    assert_error("export x = 1", "expected 'function', 'const', 'var', 'type' or 'interface'");
+    assert_error("export x = 1", "expected 'function', 'const', 'var' or 'type'");
     assert_error(
         "type Hidden = { value: int }\nexport function make(): Hidden { return { value: 1 } }",
         "uses the private type 'Hidden'",
