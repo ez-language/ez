@@ -52,9 +52,10 @@ Shape types are **nominal**: two types with the same fields are still different 
 type Celsius = { value: float }
 type Fahrenheit = { value: float }
 
-const c: Celsius = { value: 20.0 }
-f: Fahrenheit = c // Error! Celsius is not Fahrenheit
-g: Fahrenheit = { value: 68.0 } // Ok
+const celsius: Celsius = { value: 20.0 }
+fahrenheit: Fahrenheit = { value: 68.0 } // Ok
+
+fahrenheit = celsius // Error! Celsius is not Fahrenheit
 ```
 
 ## Index Signatures
