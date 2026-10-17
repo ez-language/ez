@@ -150,8 +150,6 @@ fn parse_float(text: &str) -> Value {
 pub enum PowFailure {
     /// Domain problem: the result is a complex number (`(-8) ** 0.5`).
     Complex,
-    /// Domain problem: `0 ** 0`.
-    Indeterminate,
     /// Domain problem: the result is infinite (`0 ** -1`, a pole). Not an overflow: no larger
     /// type could represent it.
     Infinite,
@@ -159,10 +157,9 @@ pub enum PowFailure {
     Overflow,
 }
 
+/// `x ** y` on real numbers. `0 ** 0` is `1`, the value of the expression (the indeterminate
+/// form only concerns limits).
 pub fn real_pow(x: f64, y: f64) -> Result<f64, PowFailure> {
-    if x == 0.0 && y == 0.0 {
-        return Err(PowFailure::Indeterminate);
-    }
     if x == 0.0 && y < 0.0 {
         return Err(PowFailure::Infinite);
     }
@@ -340,7 +337,6 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
             match real_pow(x, y) {
                 Ok(result) => Ok(ok(Value::Float(result))),
                 Err(PowFailure::Complex) => Ok(math_error("Complex")),
-                Err(PowFailure::Indeterminate) => Ok(math_error("Indeterminate")),
                 Err(PowFailure::Infinite) => Ok(math_error("Infinite")),
                 Err(PowFailure::Overflow) => Err(interpreter.error("float overflow")),
             }

@@ -11,7 +11,7 @@ The `math` module provides mathematical functions and constants.
     Returns the square root of `x`. Fails with `Complex` when `x` is negative.
 
 -   `pow(x: number, y: number) -> Result[float, MathError]`  
-    Returns `x` raised to the power of `y`. Fails with `Complex` when `x` is negative and `y` is not an integer (e.g. `pow(-8, 0.5)`), with `Indeterminate` for `pow(0, 0)`, and with `Infinite` when `x` is `0` and `y` is negative (e.g. `pow(0, -1)`, which is `1 / 0`).
+    Returns `x` raised to the power of `y`. Fails with `Complex` when `x` is negative and `y` is not an integer (e.g. `pow(-8, 0.5)`), and with `Infinite` when `x` is `0` and `y` is negative (e.g. `pow(0, -1)`, which is `1 / 0`). `pow(0, 0)` is `1`: that is the value of the expression (only the limit form 0⁰ is indeterminate).
 
 -   `floor(x: number) -> number`  
     Returns the largest integer less than or equal to `x`.
@@ -32,7 +32,7 @@ The `math` module follows one rule:
 ```ez
 type MathError = {
     Complex          // the result exists only in the complex numbers: sqrt(-1)
-    Indeterminate    // indeterminate form: pow(0, 0)
+    Indeterminate    // indeterminate form (no current function returns it)
     Infinite         // the result is infinite: pow(0, -1)
 }
 ```

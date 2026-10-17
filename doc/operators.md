@@ -27,9 +27,11 @@ Operators cannot return a `Result`, so an invalid arithmetic operation panics:
 
 -   division by zero (`1 / 0`, `1.5 % 0.0`, `0.0 ** -1.0`);
 -   results that do not fit in an `int` or a `float` (overflow);
--   `**` with a result that is not a real number (`(-8.0) ** 0.5`) or indeterminate (`0 ** 0`).
+-   `**` with a result that is not a real number (`(-8.0) ** 0.5`).
 
-To handle the `**` cases instead of panicking, use `math.pow`, which returns a `MathError` (`Complex`, `Indeterminate` or `Infinite`; see [math](standard-library/math.md)).
+`0 ** 0` is `1`.
+
+To handle the `**` cases instead of panicking, use `math.pow`, which returns a `MathError` (`Complex` or `Infinite`; see [math](standard-library/math.md)).
 
 ## Comparison Operators
 

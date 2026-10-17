@@ -718,9 +718,6 @@ impl Interpreter {
                 result.map(Value::Int).ok_or_else(overflow)
             }
             (Power, Value::Int(a), Value::Int(b)) => {
-                if *a == 0 && *b == 0 {
-                    return Err(self.error("0 ** 0 is indeterminate"));
-                }
                 if *a == 0 && *b < 0 {
                     return Err(self.error("division by zero"));
                 }
@@ -749,9 +746,6 @@ impl Interpreter {
                                 format_float(a),
                                 format_float(b)
                             )))
-                        }
-                        Err(PowFailure::Indeterminate) => {
-                            return Err(self.error("0 ** 0 is indeterminate"))
                         }
                         // `0 ** -1` is `1 / 0`.
                         Err(PowFailure::Infinite) => return Err(self.error("division by zero")),

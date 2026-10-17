@@ -111,6 +111,33 @@ Everything in a module is private by default. Only declarations marked with `exp
 -   The standard library is unaffected: all of its members are public.
 -   Later: re-exports (`export { add } from 'math.ez'`).
 
+### Tooling: `ez run` and `ez build`
+
+The interpreter stays: `ez run` checks and interprets a program, for fast development. The compiler will be `ez build`, producing a native binary. Both must give the same results (every test runs in both modes).
+
+### The `?` operator
+
+`?` propagates errors instead of writing a `match` for every fallible call:
+
+-   on a `Result`, `x?` gives the `Ok` value, or returns the same `Err` from the function;
+-   on an `Option`, `x?` gives the `Some` value, or returns `None` (only in functions returning `Option`);
+-   at the top level of the main file, an `Err` stops the program with its message and exit code 1.
+
+```ez
+function readConfig(path: string): Result[Json, ConfigError] {
+    f = file.open(path, 'r')?
+    text = f.read()?
+
+    return json.parse(text)
+}
+```
+
+How errors of different types are combined is still open (see [Open decisions](#open-decisions)).
+
+### Methods use `self`
+
+When methods on types are added, the value a method is called on is named `self` (not `this`).
+
 ### No `interface`
 
 `type` covers what interfaces did: shape types describe the fields of a value. Shape types are **nominal**: two types with the same fields are different types (`Celsius` and `Fahrenheit` do not mix), and an object literal is accepted by any type whose fields it matches.
@@ -172,7 +199,7 @@ type ParseError = {
 // math
 type MathError = {
     Complex          // the result exists only in the complex numbers: sqrt(-1), log(-1)
-    Indeterminate    // indeterminate form: pow(0, 0)
+    Indeterminate    // indeterminate form (no current function returns it; see Open decisions)
     Infinite         // the result is infinite (a pole): pow(0, -1), log(0)
 }
 ```
@@ -198,7 +225,9 @@ One rule decides how numeric failures are reported:
 | Problem | Meaning | Handling | Examples |
 | --- | --- | --- | --- |
 | **Representation limit** | The result exists but does not fit in an `int` or a `float` | panic | `9223372036854775807 + 1`, `1e308 * 10`, `math.pow(10, 400)`, `math.round(1e300)` |
-| **Domain problem** | The result does not exist in the real numbers | `Err(MathError)` | `math.sqrt(-1)` → `Complex`, `math.pow(0, 0)` → `Indeterminate`, `math.pow(0, -1)` → `Infinite` |
+| **Domain problem** | The result does not exist in the real numbers | `Err(MathError)` | `math.sqrt(-1)` → `Complex`, `math.pow(0, -1)` → `Infinite` |
+
+`0 ** 0` and `math.pow(0, 0)` are `1`: that is the value of the expression, as in algebra and combinatorics. The indeterminate form 0⁰ only concerns limits.
 
 Operators cannot return a `Result`, so they always panic, including on domain problems such as division by zero.
 
@@ -269,12 +298,7 @@ Notes:
 
 1.  **Memory management**: garbage collection (recommended to start, e.g. Boehm through the C backend), reference counting (leaks cycles) or another approach.
 2.  **Initial backend**: C (recommended) or LLVM.
-3.  **The interpreter**: keep it as `ez run` for fast development, or retire it once the compiler exists.
-4.  **The `?` operator**, with these rules:
-    -   on a `Result`, `x?` gives the `Ok` value or returns the same `Err` from the function;
-    -   on an `Option`, `x?` gives the `Some` value or returns `None` (only in functions returning `Option`);
-    -   at the top level of the main file, an `Err` stops the program with its message and exit code 1.
-5.  **Error conversion with `?`** when a function combines errors from different modules:
+3.  **Error conversion with `?`** when a function combines errors from different modules:
 
     ```ez
     type ConfigError = {
@@ -283,10 +307,13 @@ Notes:
     }
     ```
 
-    -   (a) explicit only: `file.open(path, Read).mapErr(File)?`;
+    -   (a) explicit only: `file.open(path, 'r').mapErr(File)?`;
     -   (b) automatic with a strict rule (recommended): `?` wraps the error when the function's error type has **exactly one** variant whose only field has the received error type. Otherwise it is a compile error and `mapErr` is required. `mapErr` is always available.
-6.  **`defer`** to release resources (`defer f.close()`), since there is no `try` / `finally`.
-7.  **Standard library API changes**:
+4.  **`defer`** to release resources (`defer f.close()`), since there is no `try` / `finally`.
+5.  **Standard library API changes**:
     -   `file.open(path, mode)` with `type Mode = { Read  Write  Append }` instead of `'r'`, `'w'`, `'a'`. Reading a file opened for writing, or using a closed file, panics.
     -   `regex.compile(pattern) -> Result[Regex, RegexError]`, with infallible methods on `Regex`.
     -   A `.message()` method on every standard library error type, returning a human-readable text.
+6.  **`MathError.Indeterminate`**: since `0 ** 0` is `1`, no current function returns it, but an exhaustive `match` on a `MathError` must still handle it. Keep it for future functions, or remove it until one needs it.
+7.  **Phase 1 syntax**: generic functions (`function first[T](items: T[]): Option[T]`?), method declarations (`function Person.greet()`?), the collections, text and system APIs, and FFI.
+8.  **Variable scope**: today `x = 1` inside an `if` block declares `x` only in that block (block scope), while the documentation only says "global, or local to a function".

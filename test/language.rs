@@ -997,7 +997,7 @@ fn stdlib_math() {
     "#;
     assert_eq!(
         run(source),
-        "78.53981633974483\nno real square root\nOk(4.0) Err(Complex) Err(Indeterminate) Err(Infinite) Ok(-8.0)\n3 2.5 2 3 3\ntrue\n"
+        "78.53981633974483\nno real square root\nOk(4.0) Err(Complex) Ok(1.0) Err(Infinite) Ok(-8.0)\n3 2.5 2 3 3\ntrue\n"
     );
     // Representation limits panic: a larger type would fit the result, unlike Infinite.
     assert_error("import math\nprint(math.pow(10, 400))", "float overflow");
@@ -1009,11 +1009,11 @@ fn floats_have_no_nan_or_infinity() {
     assert_error("x = 1e308 * 10.0", "float overflow");
     assert_error("x = 1.5 / 0.0", "division by zero");
     assert_error("x = (-8.0) ** 0.5", "not a real number");
-    assert_error("x = 0.0 ** 0.0", "indeterminate");
-    assert_error("x = 0 ** 0", "indeterminate");
     assert_error("x = 0.0 ** -1.0", "division by zero");
     assert_error("x = 1e400", "float literal is too large");
     assert_eq!(run("print(2.0 ** 0.5 > 1.41, 2 ** 3, (-8.0) ** 2.0)"), "true 8 64.0\n");
+    // 0 ** 0 is 1: the value of the expression (the indeterminate form only concerns limits).
+    assert_eq!(run("print(0 ** 0, 0.0 ** 0.0)"), "1 1.0\n");
     assert_eq!(run("print(6.022e23, 1e15, 2.5e-3)"), "6.022e23 1000000000000000.0 0.0025\n");
 }
 
