@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -168,6 +169,14 @@ pub enum TemplatePart {
     Expression(AstNode),
 }
 
+/// Variant that wraps an error propagated by `?`: `File` in `Err(File(error))`, possibly from
+/// an imported module (`config.File`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TryWrap {
+    pub module: Option<String>,
+    pub variant: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectEntry {
     pub key: String,
@@ -262,6 +271,13 @@ pub enum AstNode {
     Import {
         kind: ImportKind,
         path: String,
+    },
+    /// `value?`: gives the `Ok`/`Some` value, or returns the `Err`/`None` from the function.
+    /// When the error must be wrapped in a variant of the function's error type, the type
+    /// checker records that variant in `wrap`.
+    Try {
+        value: Box<AstNode>,
+        wrap: RefCell<Option<TryWrap>>,
     },
     /// `export` before a top-level declaration.
     Export(Box<AstNode>),

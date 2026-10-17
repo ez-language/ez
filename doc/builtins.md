@@ -29,4 +29,4 @@ function check(age: int): int {
 }
 ```
 
-A panic cannot be caught: ez has no `try` / `catch`. Index out of range, division by zero and overflow also panic.
+A panic cannot be caught: ez has no `try` / `catch`. Index out of range, division by zero and overflow also panic. Expected failures are `Result` values instead (see [Error Handling](error-handling.md)).

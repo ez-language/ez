@@ -5,8 +5,8 @@ The `ez` language provides two main variable types that control mutability and s
 ## `var`
 
 -   **Mutability**: Mutable
--   **Scope**: Global (by default)
--   **Description**: The `var` type is the default in `ez`. You don't need to specify it explicitly — any variable not declared with `const` is considered a `var`. `var` variables can be changed at any time. Their scope is global by default, unless declared inside a function, in which case they become local to that function.
+-   **Scope**: Block
+-   **Description**: The `var` type is the default in `ez`. You don't need to specify it explicitly — any variable not declared with `const` is considered a `var`. `var` variables can be changed at any time. A variable belongs to the block where it is declared: the file (global), a function, or any `{ ... }` block such as the body of an `if` or a loop. It is visible in that block and in the blocks inside it.
 
 **Example**:
 
@@ -24,6 +24,28 @@ test()
 
 print(globalVar) // 1 (global variable accessible outside the function)
 print(localVar) // Error! 'localVar' is not accessible outside the function
+```
+
+Blocks inside a function work the same way:
+
+```ez
+if (true) {
+	message = 'inside' // declared in the if block
+}
+
+print(message) // Error! 'message' is not accessible outside the block
+```
+
+Assigning to a name that already exists in an outer block changes that variable instead of declaring a new one:
+
+```ez
+count = 0
+
+if (true) {
+	count = 1 // changes the outer 'count'
+}
+
+print(count) // 1
 ```
 
 ## `const`

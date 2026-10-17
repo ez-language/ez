@@ -16,6 +16,7 @@ Welcome to **ez Language Documentation**. Here you will find details about sinta
 -   [Operators](operators.md)
 -   [Methods](methods.md)
 -   [Functions](functions.md)
+-   [Error Handling](error-handling.md)
 -   [String Interpolation](string-interpolation.md)
 -   [Modules and Imports](modules-and-imports.md)
 -   [Standard Library](stdlib.md)

@@ -42,11 +42,11 @@ pub fn none() -> Value {
     variant("Option", "None", vec![])
 }
 
-fn ok(value: Value) -> Value {
+pub fn ok(value: Value) -> Value {
     variant("Result", "Ok", vec![value])
 }
 
-fn err(value: Value) -> Value {
+pub fn err(value: Value) -> Value {
     variant("Result", "Err", vec![value])
 }
 

@@ -1,5 +1,6 @@
 pub mod ast;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::error::EzError;
@@ -744,6 +745,14 @@ impl Parser {
             }
             if *self.current() == Token::Dot {
                 left = self.parse_member(left)?;
+                continue;
+            }
+            if *self.current() == Token::Question {
+                self.advance();
+                left = AstNode::Try {
+                    value: Box::new(left),
+                    wrap: RefCell::new(None),
+                };
                 continue;
             }
 

@@ -801,6 +801,105 @@ fn functions_are_hoisted() {
 }
 
 // ---------------------------------------------------------------------------
+// Error propagation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn question_mark_operator() {
+    let source = r#"
+        function parseAge(text: string): Result[int, ParseError] {
+            age = int(text)?
+            return Ok(age)
+        }
+        print(parseAge('42'), parseAge('x'))
+
+        function first(items: string[]): Option[string] {
+            if (items.length() == 0) { return None }
+            return Some(items[0])
+        }
+        function shout(items: string[]): Option[string] {
+            item = first(items)?
+            return Some(item.upper())
+        }
+        print(shout(['hey']), shout([]))
+    "#;
+    assert_eq!(run(source), "Ok(42) Err(InvalidNumber('x'))\nSome('HEY') None\n");
+}
+
+#[test]
+fn question_mark_wraps_errors_automatically() {
+    let source = r#"
+        import json
+
+        type AppError = {
+            Parse(error: ParseError)
+            Json(error: json.JsonError)
+            Message(text: string)
+        }
+
+        function load(text: string, count: string): Result[int, AppError] {
+            json.parse(text)?
+            n = int(count)?
+            return Ok(n)
+        }
+        print(load('[1]', '3'), load('[1', '3'), load('[1]', 'x'))
+    "#;
+    assert_eq!(
+        run(source),
+        "Ok(3) Err(Json(Syntax('expected \\',\\' or \\']\\'', 1, 3))) Err(Parse(InvalidNumber('x')))\n"
+    );
+    assert_error(
+        "function f(): Result[int, string] {\n x = int('1')?\n return Ok(x)\n}",
+        "use '.mapErr(...)'",
+    );
+    assert_error(
+        "type E = { A(e: ParseError)  B(e: ParseError) }\nfunction f(): Result[int, E] {\n x = int('1')?\n return Ok(x)\n}",
+        "the variants A, B all hold a ParseError",
+    );
+}
+
+#[test]
+fn map_err() {
+    let source = r#"
+        function parse(text: string): Result[int, string] {
+            n = int(text).mapErr((error: ParseError) => `bad number: ${text}`)?
+            return Ok(n)
+        }
+        type Wrapped = { Wrap(error: ParseError) }
+        print(parse('1'), parse('x'), int('y').mapErr(Wrap))
+    "#;
+    assert_eq!(
+        run(source),
+        "Ok(1) Err('bad number: x') Err(Wrap(InvalidNumber('y')))\n"
+    );
+    assert_error("x = int('1').mapErr(5)", "'mapErr' expects a function");
+}
+
+#[test]
+fn question_mark_rules() {
+    assert_error("function f(): int {\n return int('1')?\n}", "needs the function to return a Result too");
+    assert_error("x = 5?", "can only be used on a Result or an Option");
+    assert_error("g = (s: string) => int(s)?", "needs the function to declare its return type");
+    // At the top level of the main file, an error stops the program.
+    let (output, result) = execute("print(int('1')?)\nn = int('oops')?\nprint('never')", "", Path::new("test.ez"));
+    assert_eq!(output, "1\n");
+    assert_eq!(result.unwrap_err().to_string(), "error: test.ez:2: Err(InvalidNumber('oops'))");
+}
+
+#[test]
+fn imports_are_hoisted() {
+    let source = r#"
+        type Failure = { Bad(error: math.MathError) }
+        print(root(16.0))
+        function root(x: float): Result[float, Failure] {
+            return Ok(math.sqrt(x)?)
+        }
+        import math
+    "#;
+    assert_eq!(run(source), "Ok(4.0)\n");
+}
+
+// ---------------------------------------------------------------------------
 // Modules
 // ---------------------------------------------------------------------------
 

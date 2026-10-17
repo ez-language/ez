@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use crate::error::EzError;
 use crate::parser::ast::{
-    AssignOperator, AstNode, BinaryOperator, ImportKind, MatchArm, Pattern, TemplatePart, TypeDef,
-    TypeExpr, UnaryOperator,
+    AssignOperator, AstNode, BinaryOperator, ImportKind, MatchArm, Pattern, TemplatePart, TryWrap,
+    TypeDef, TypeExpr, UnaryOperator,
 };
 use crate::runtime::env::Env;
 use crate::runtime::stdlib::{self, PowFailure};
@@ -42,6 +42,8 @@ pub struct Interpreter {
     pub(crate) started: Instant,
     pub(crate) regex_cache: HashMap<String, regex::Regex>,
     current_module: Option<Rc<ModuleValue>>,
+    /// Functions being executed (0 at the top level of a module).
+    function_depth: usize,
     file: Rc<str>,
     dir: PathBuf,
     line: usize,
@@ -81,6 +83,7 @@ impl Interpreter {
             started: Instant::now(),
             regex_cache: HashMap::new(),
             current_module: None,
+            function_depth: 0,
             file: Rc::from(""),
             dir: PathBuf::from("."),
             line: 0,
@@ -95,14 +98,16 @@ impl Interpreter {
         result
     }
 
-    pub(crate) fn error(&self, message: impl Into<String>) -> Flow {
-        let message = message.into();
-        let location = if self.line == 0 {
+    fn location(&self) -> String {
+        if self.line == 0 {
             self.file.to_string()
         } else {
             format!("{}:{}", self.file, self.line)
-        };
-        Flow::Error(EzError::RuntimeError(format!("{}: {}", location, message)))
+        }
+    }
+
+    pub(crate) fn error(&self, message: impl Into<String>) -> Flow {
+        Flow::Error(EzError::RuntimeError(format!("{}: {}", self.location(), message.into())))
     }
 
     fn load_module(&mut self, path: &Path) -> Result<Rc<ModuleValue>, EzError> {
@@ -170,7 +175,16 @@ impl Interpreter {
     // ------------------------------------------------------------------
 
     /// Defines functions and constructors of a block before running it.
-    fn hoist(&mut self, statements: &[AstNode], env: &Rc<Env>) {
+    fn hoist(&mut self, statements: &[AstNode], env: &Rc<Env>) -> Exec<()> {
+        // Imports first, as in the type checker: the whole block can use them.
+        for statement in statements {
+            if let AstNode::Located { line, .. } = statement {
+                self.line = *line;
+            }
+            if let AstNode::Import { kind, path } = statement.unlocated() {
+                self.import(kind, path, env)?;
+            }
+        }
         for statement in statements {
             match statement.unlocated() {
                 AstNode::FunctionDecl {
@@ -215,10 +229,11 @@ impl Interpreter {
                 _ => {}
             }
         }
+        Ok(())
     }
 
     fn exec_statements(&mut self, statements: &[AstNode], env: &Rc<Env>) -> Exec<Value> {
-        self.hoist(statements, env);
+        self.hoist(statements, env)?;
         let mut last = Value::Void;
         for statement in statements {
             last = self.eval(statement, env)?;
@@ -316,6 +331,7 @@ impl Interpreter {
                 self.eval(node, env)
             }
             AstNode::Export(node) => self.eval(node, env),
+            AstNode::Try { value, wrap } => self.eval_try(value, wrap, env),
             AstNode::IntLiteral(n) => Ok(Value::Int(*n)),
             AstNode::FloatLiteral(n) => Ok(Value::Float(*n)),
             AstNode::StringLiteral(s) => Ok(Value::str(s)),
@@ -458,11 +474,58 @@ impl Interpreter {
             AstNode::FunctionDecl { .. } | AstNode::TypeDecl { .. } => {
                 Ok(Value::Void)
             }
-            AstNode::Import { kind, path } => {
-                self.import(kind, path, env)?;
-                Ok(Value::Void)
-            }
+            // Imports run when the block is hoisted.
+            AstNode::Import { .. } => Ok(Value::Void),
         }
+    }
+
+    /// `value?`: the `Ok`/`Some` value, or an early return of the `Err`/`None`. At the top level
+    /// of the main file, the failure stops the program.
+    fn eval_try(&mut self, value: &AstNode, wrap: &RefCell<Option<TryWrap>>, env: &Rc<Env>) -> Exec<Value> {
+        let variant = match self.eval(value, env)? {
+            Value::Variant(variant) => variant,
+            other => {
+                return Err(self.error(format!(
+                    "'?' expects a Result or an Option, found {}",
+                    other.type_name()
+                )))
+            }
+        };
+        let failure = match variant.name.as_str() {
+            "Ok" | "Some" => return Ok(variant.values[0].clone()),
+            "None" => stdlib::none(),
+            _ => {
+                let error = variant.values[0].clone();
+                let error = match &*wrap.borrow() {
+                    // Automatic conversion: wrap the error in the variant the checker chose.
+                    Some(wrap) => {
+                        let constructor = match &wrap.module {
+                            None => env.get(&wrap.variant),
+                            Some(module) => match env.get(module) {
+                                Some(Value::Module(module)) => module.env.get_local(&wrap.variant),
+                                _ => None,
+                            },
+                        };
+                        match constructor {
+                            Some(constructor) => self.call_value(&constructor, vec![error])?,
+                            None => {
+                                return Err(self.error(format!("'{}' is not in scope", wrap.variant)))
+                            }
+                        }
+                    }
+                    None => error,
+                };
+                stdlib::err(error)
+            }
+        };
+        if self.function_depth == 0 {
+            return Err(Flow::Error(EzError::UnhandledError(format!(
+                "{}: {}",
+                self.location(),
+                failure.repr()
+            ))));
+        }
+        Err(Flow::Return(failure))
     }
 
     fn condition(&mut self, condition: &AstNode, env: &Rc<Env>) -> Exec<bool> {
@@ -894,10 +957,12 @@ impl Interpreter {
 
         let saved_file = std::mem::replace(&mut self.file, Rc::clone(&closure.file));
         let saved_line = self.line;
+        self.function_depth += 1;
         let result = match closure.body.unlocated() {
             AstNode::Block(statements) => self.exec_statements(statements, &scope),
             expression => self.eval(expression, &scope),
         };
+        self.function_depth -= 1;
         self.file = saved_file;
         self.line = saved_line;
 
@@ -928,6 +993,14 @@ impl Interpreter {
                 self.call_value(&member, args)
             }
             Value::Native(native) => stdlib::native_method(self, native, name, args),
+            Value::Variant(variant) if variant.sum.name == "Result" && name == "mapErr" => {
+                if variant.name != "Err" {
+                    return Ok(object.clone());
+                }
+                let converter = args.into_iter().next().unwrap_or(Value::Void);
+                let error = self.call_value(&converter, vec![variant.values[0].clone()])?;
+                Ok(stdlib::err(error))
+            }
             other => Err(self.error(format!(
                 "a value of type {} has no method '{}'",
                 other.type_name(),

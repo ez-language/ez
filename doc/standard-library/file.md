@@ -66,3 +66,17 @@ match (file.open('notes.txt', 'r')) {
     Err(error) => print(error)
 }
 ```
+
+With the `?` operator (see [Error Handling](../error-handling.md)), inside a function:
+
+```ez
+import file
+
+function readNotes(): Result[string, file.FileError] {
+    f = file.open('notes.txt', 'r')?
+    content = f.read()?
+    f.close()
+
+    return Ok(content)
+}
+```

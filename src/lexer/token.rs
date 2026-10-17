@@ -72,6 +72,8 @@ pub enum Token {
     Dot,
     Semicolon,
     Colon,
+    /// `?`: error propagation.
+    Question,
     /// A character that does not belong to the language.
     Illegal(char),
     EOF,

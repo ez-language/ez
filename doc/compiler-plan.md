@@ -38,7 +38,7 @@ stage 3: must be identical to stage 2 (fixed point)
 
 When stage 2 and stage 3 produce the same output, the compiler sustains itself.
 
-**Backend:** generate C first (pending confirmation, see [Open decisions](#open-decisions)). It needs no LLVM or Cranelift bindings, works on any platform with a C compiler, and the generated code is readable, which makes debugging much easier. A native backend (LLVM, Cranelift or direct assembly) can be added later.
+**Backend:** generate C first (decided). It needs no LLVM or Cranelift bindings, works on any platform with a C compiler, and the generated code is readable, which makes debugging much easier. A native backend (LLVM, Cranelift or direct assembly) can be added later.
 
 ---
 
@@ -124,19 +124,48 @@ The interpreter stays: `ez run` checks and interprets a program, for fast develo
 -   at the top level of the main file, an `Err` stops the program with its message and exit code 1.
 
 ```ez
-function readConfig(path: string): Result[Json, ConfigError] {
-    f = file.open(path, 'r')?
+type ConfigError = {
+    File(error: file.FileError)
+    Json(error: json.JsonError)
+}
+
+function readConfig(path: string): Result[json.Json, ConfigError] {
+    f = file.open(path, 'r')?       // FileError → File(...)
     text = f.read()?
 
-    return json.parse(text)
+    return Ok(json.parse(text)?)    // JsonError → Json(...)
 }
 ```
 
-How errors of different types are combined is still open (see [Open decisions](#open-decisions)).
+**Error conversion** is automatic, with a strict rule: when the error type differs from the function's error type, `?` wraps it in the variant of the function's error type that has **exactly one** field of that type. If there is no such variant, or more than one, it is a compile error, and `result.mapErr(f)` converts the error explicitly.
+
+Implemented; see [Error Handling](error-handling.md).
 
 ### Methods use `self`
 
 When methods on types are added, the value a method is called on is named `self` (not `this`).
+
+### Block scope
+
+A variable belongs to the block where it is declared (the file, a function, or any `{ ... }` block) and is visible in the blocks inside it. Assigning to a name that exists in an outer block changes that variable; otherwise the assignment declares a new variable in the current block.
+
+### Imports apply to the whole block
+
+`import` statements are processed before the rest of their block, so types and functions declared before an `import` can use it (like ES modules).
+
+### Memory management: ownership
+
+The compiled code will manage memory with **ownership** (to be designed). This replaces the earlier recommendation of a garbage collector. `defer` depends on this design.
+
+The design has to settle how ownership fits the current semantics, which assume shared references:
+
+-   lists and objects are reference values: a `const` list can be changed, and `is` compares identity;
+-   closures capture variables by reference;
+-   an exported `var` is read live by importers.
+
+### `MathError.Indeterminate` stays
+
+It is kept for future functions, even though no current function returns it (`0 ** 0` is `1`).
 
 ### No `interface`
 
@@ -254,7 +283,7 @@ A compiler is a large program, with many data structures and many operations tha
     -   a `char` (or `byte`) type and conversion to and from character codes;
     -   `substring`/slicing, `startsWith`, `indexOf` and a string builder;
     -   efficient indexing (`s[i]` is O(n) today).
-4.  **Error propagation**: the `?` operator (see [Open decisions](#open-decisions)).
+4.  **Error propagation**: the `?` operator (implemented).
 5.  **Methods on types** (`Type.method()`, already on the roadmap).
 6.  **Complete type inference**: today the checker tolerates unresolved types (`x = None`, `[]`). Code generation needs every type resolved, which requires real unification.
 7.  **System access**:
@@ -272,7 +301,7 @@ A compiler is a large program, with many data structures and many operations tha
 
 -   **Closures** capture variables by reference. Compiled, captured variables live in heap cells (closure conversion).
 -   **`int` to `float` coercion** is inconsistent today (an `int` stored in a `float` field of an object stays an `int`). With complete types, every conversion is explicit in the generated code.
--   **Memory management**: see [Open decisions](#open-decisions).
+-   **Memory management**: ownership (see [Memory management](#memory-management-ownership)); its design is open.
 
 ---
 
@@ -296,24 +325,10 @@ Notes:
 
 ## Open decisions
 
-1.  **Memory management**: garbage collection (recommended to start, e.g. Boehm through the C backend), reference counting (leaks cycles) or another approach.
-2.  **Initial backend**: C (recommended) or LLVM.
-3.  **Error conversion with `?`** when a function combines errors from different modules:
-
-    ```ez
-    type ConfigError = {
-        File(error: file.FileError)
-        Json(error: json.JsonError)
-    }
-    ```
-
-    -   (a) explicit only: `file.open(path, 'r').mapErr(File)?`;
-    -   (b) automatic with a strict rule (recommended): `?` wraps the error when the function's error type has **exactly one** variant whose only field has the received error type. Otherwise it is a compile error and `mapErr` is required. `mapErr` is always available.
-4.  **`defer`** to release resources (`defer f.close()`), since there is no `try` / `finally`.
-5.  **Standard library API changes**:
+1.  **Ownership design**: the rules (moves, borrowing or another model), and how they fit the current reference semantics listed in [Memory management](#memory-management-ownership).
+2.  **`defer`** to release resources (`defer f.close()`), depending on the ownership design.
+3.  **Standard library API changes**:
     -   `file.open(path, mode)` with `type Mode = { Read  Write  Append }` instead of `'r'`, `'w'`, `'a'`. Reading a file opened for writing, or using a closed file, panics.
     -   `regex.compile(pattern) -> Result[Regex, RegexError]`, with infallible methods on `Regex`.
     -   A `.message()` method on every standard library error type, returning a human-readable text.
-6.  **`MathError.Indeterminate`**: since `0 ** 0` is `1`, no current function returns it, but an exhaustive `match` on a `MathError` must still handle it. Keep it for future functions, or remove it until one needs it.
-7.  **Phase 1 syntax**: generic functions (`function first[T](items: T[]): Option[T]`?), method declarations (`function Person.greet()`?), the collections, text and system APIs, and FFI.
-8.  **Variable scope**: today `x = 1` inside an `if` block declares `x` only in that block (block scope), while the documentation only says "global, or local to a function".
+4.  **Phase 1 syntax**: generic functions (`function first[T](items: T[]): Option[T]`?), method declarations (`function Person.greet()`?), the collections, text and system APIs, and FFI.

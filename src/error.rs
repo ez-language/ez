@@ -7,6 +7,8 @@ pub enum EzError {
     TypeError(String),
     RuntimeError(String),
     ImportError(String),
+    /// An `Err` or `None` propagated with `?` out of the main file.
+    UnhandledError(String),
 }
 
 impl fmt::Display for EzError {
@@ -17,6 +19,7 @@ impl fmt::Display for EzError {
             EzError::TypeError(message) => write!(f, "type error: {}", message),
             EzError::RuntimeError(message) => write!(f, "panic: {}", message),
             EzError::ImportError(message) => write!(f, "import error: {}", message),
+            EzError::UnhandledError(message) => write!(f, "error: {}", message),
         }
     }
 }

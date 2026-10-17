@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::error::EzError;
 use crate::parser::ast::{
     AssignOperator, AstNode, BinaryOperator, Field, ImportKind, MatchArm, Param, Pattern,
-    TemplatePart, TypeDef, TypeExpr, UnaryOperator,
+    TemplatePart, TryWrap, TypeDef, TypeExpr, UnaryOperator,
 };
 use crate::parser::parse_source;
 use crate::semantic::builtin_sums::{stdlib_functions, BUILTIN_SUMS};
@@ -124,6 +125,8 @@ pub struct BuiltinTypes {
 /// Per-module checking state.
 #[derive(Default)]
 struct ModuleState {
+    /// Whether this is the main file (where `?` may be used at the top level).
+    is_entry: bool,
     scopes: Vec<Scope>,
     returns: Vec<ReturnContext>,
     file: String,
@@ -411,6 +414,7 @@ impl Checker {
         let saved = std::mem::replace(
             &mut self.state,
             ModuleState {
+                is_entry: self.loading.len() == 1,
                 scopes: vec![prelude, Scope::default()],
                 returns: Vec::new(),
                 file: display.to_string(),
@@ -790,6 +794,14 @@ impl Checker {
     /// Declares the types, constructors and function signatures of a block before checking it,
     /// so they can be used before their definition (and recursively).
     fn hoist(&mut self, statements: &[AstNode]) -> CheckResult<()> {
+        // Imports first: types and function signatures may refer to imported modules.
+        for statement in statements {
+            self.set_line(statement);
+            if let AstNode::Import { kind, path } = statement.unlocated() {
+                self.check_import(kind, path)?;
+            }
+        }
+
         let mut pending: Vec<(&AstNode, Option<TypeId>)> = Vec::new();
         for statement in statements {
             self.set_line(statement);
@@ -1066,10 +1078,8 @@ impl Checker {
                 Ok(Type::Void)
             }
             AstNode::TypeDecl { .. } => Ok(Type::Void),
-            AstNode::Import { kind, path } => {
-                self.check_import(kind, path)?;
-                Ok(Type::Void)
-            }
+            // Imports are processed when the block is hoisted.
+            AstNode::Import { .. } => Ok(Type::Void),
             AstNode::While { condition, body } => {
                 self.check_condition(condition, "while")?;
                 self.check_block(body, None, vec![])?;
@@ -1654,8 +1664,188 @@ impl Checker {
                 self.check_function("anonymous function", params, signature, body)
             }
             AstNode::Block(_) => self.check_block(node, expected, vec![]),
+            AstNode::Try { value, wrap } => self.check_try(value, wrap),
             statement => self.check_statement(statement, expected),
         }
+    }
+
+    /// `result.mapErr(f)` with `f: (E) => F` gives a `Result[T, F]`.
+    fn check_map_err(&mut self, type_args: &[Type], args: &[AstNode]) -> CheckResult<Type> {
+        let ok = type_args.first().cloned().unwrap_or(Type::Unknown);
+        let error = type_args.get(1).cloned().unwrap_or(Type::Unknown);
+        if args.len() != 1 {
+            return self.err(format!("'mapErr' expects 1 argument, found {}", args.len()));
+        }
+        let converter = self.check_value(&args[0], None)?;
+        match converter {
+            Type::Function { params, ret } if params.len() == 1 => {
+                if !self.assignable(&params[0], &error) {
+                    return self.err(format!(
+                        "the function given to 'mapErr' must accept {}, but it accepts {}",
+                        self.show(&error),
+                        self.show(&params[0])
+                    ));
+                }
+                Ok(Type::Named {
+                    id: self.builtins.result,
+                    args: vec![ok, *ret],
+                })
+            }
+            other => self.err(format!(
+                "'mapErr' expects a function with one parameter (or a variant with one field), found {}",
+                self.show(&other)
+            )),
+        }
+    }
+
+    /// `value?` on a `Result` or an `Option`: its type is the `Ok` / `Some` value.
+    fn check_try(&mut self, value: &AstNode, wrap: &RefCell<Option<TryWrap>>) -> CheckResult<Type> {
+        let ty = self.check_value(value, None)?;
+        let (id, args) = match &ty {
+            Type::Named { id, args } if *id == self.builtins.result || *id == self.builtins.option => {
+                (*id, args.clone())
+            }
+            Type::Unknown => return Ok(Type::Unknown),
+            other => {
+                return self.err(format!(
+                    "'?' can only be used on a Result or an Option, found {}",
+                    self.show(other)
+                ))
+            }
+        };
+        let inner = args.first().cloned().unwrap_or(Type::Unknown);
+        let is_result = id == self.builtins.result;
+        let kind = if is_result { "a Result" } else { "an Option" };
+
+        let declared = match self.state.returns.last() {
+            // At the top level of the main file, a failure stops the program.
+            None if self.state.is_entry => return Ok(inner),
+            None => {
+                return self.err(
+                    "'?' at the top level is only allowed in the main file".to_string(),
+                )
+            }
+            Some(context) => context.declared.clone(),
+        };
+        let declared = match declared {
+            Some(declared) => declared,
+            None => {
+                return self.err(
+                    "'?' needs the function to declare its return type".to_string(),
+                )
+            }
+        };
+        let returned_args = match &declared {
+            Type::Named { id: returned, args } if *returned == id => args.clone(),
+            other => {
+                return self.err(format!(
+                    "'?' on {} needs the function to return {} too, but it returns {}",
+                    kind,
+                    kind,
+                    self.show(other)
+                ))
+            }
+        };
+        if !is_result {
+            return Ok(inner);
+        }
+
+        let error = args.get(1).cloned().unwrap_or(Type::Unknown);
+        let target = returned_args.get(1).cloned().unwrap_or(Type::Unknown);
+        if self.assignable(&target, &error) {
+            return Ok(inner);
+        }
+        *wrap.borrow_mut() = Some(self.error_wrapper(&error, &target)?);
+        Ok(inner)
+    }
+
+    /// Automatic conversion of `?`: the variant of `target` (the function's error type) that
+    /// holds exactly one field of type `error`. It must be the only such variant.
+    fn error_wrapper(&self, error: &Type, target: &Type) -> CheckResult<TryWrap> {
+        let use_map_err = format!(
+            "use '.mapErr(...)' to convert {} into {}",
+            self.show(error),
+            self.show(target)
+        );
+        let (target_id, target_args) = match target {
+            Type::Named { id, args } if self.table.variants_of(*id).is_some() => (*id, args.clone()),
+            _ => {
+                return self.err(format!(
+                    "'?' cannot convert {} into {}: {}",
+                    self.show(error),
+                    self.show(target),
+                    use_map_err
+                ))
+            }
+        };
+        let candidates: Vec<String> = self
+            .table
+            .variants_of(target_id)
+            .into_iter()
+            .flatten()
+            .filter(|variant| match variant.fields.as_slice() {
+                [(_, field)] => {
+                    let field = field.substitute(&target_args);
+                    field == *error || (self.assignable(&field, error) && self.assignable(error, &field))
+                }
+                _ => false,
+            })
+            .map(|variant| variant.name.clone())
+            .collect();
+        let variant = match candidates.as_slice() {
+            [variant] => variant.clone(),
+            [] => {
+                return self.err(format!(
+                    "'?' cannot convert {} into {}: no variant of {} holds a {} ({})",
+                    self.show(error),
+                    self.show(target),
+                    self.show(target),
+                    self.show(error),
+                    use_map_err
+                ))
+            }
+            several => {
+                return self.err(format!(
+                    "'?' cannot choose how to convert {} into {}: the variants {} all hold a {} ({})",
+                    self.show(error),
+                    self.show(target),
+                    several.join(", "),
+                    self.show(error),
+                    use_map_err
+                ))
+            }
+        };
+
+        // The runtime builds the variant by name: find how it is reachable from here.
+        let is_target_constructor = |symbol: &Symbol| {
+            matches!(&symbol.kind, SymbolKind::Constructor { id, .. } if *id == target_id)
+        };
+        if self.lookup(&variant).is_some_and(is_target_constructor) {
+            return Ok(TryWrap {
+                module: None,
+                variant,
+            });
+        }
+        for scope in self.state.scopes.iter().rev() {
+            for (alias, symbol) in &scope.vars {
+                if let Type::Module(module) = symbol.ty {
+                    if self.modules[module]
+                        .members
+                        .get(&variant)
+                        .is_some_and(is_target_constructor)
+                    {
+                        return Ok(TryWrap {
+                            module: Some(alias.clone()),
+                            variant,
+                        });
+                    }
+                }
+            }
+        }
+        self.err(format!(
+            "'?' would wrap the error in '{}', but '{}' is not in scope here (import it)",
+            variant, variant
+        ))
     }
 
     /// Type of an `if`/`match` with several branches.
@@ -2301,6 +2491,12 @@ impl Checker {
             };
         }
 
+        // `result.mapErr(f)`: converts the error with `f` (a function or a variant constructor).
+        if let Type::Named { id, args: type_args } = object_ty {
+            if *id == self.builtins.result && name == "mapErr" {
+                return self.check_map_err(type_args, args);
+            }
+        }
         let s = Type::String;
         let signature: Option<(Vec<Type>, Type)> = match object_ty {
             Type::String => match name {

@@ -182,6 +182,7 @@ impl Lexer {
             Some('.') => self.single(Token::Dot),
             Some(';') => self.single(Token::Semicolon),
             Some(':') => self.single(Token::Colon),
+            Some('?') => self.single(Token::Question),
 
             Some(c) => self.single(Token::Illegal(c)),
             None => Token::EOF,

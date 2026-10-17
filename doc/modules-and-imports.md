@@ -58,6 +58,8 @@ print(result) // 15
 
 In the example above, we're importing the `math` module that contains the functions `add` and `subtract`, which we can call in the main code.
 
+Imports apply to the whole file, wherever they are written: types and functions declared before an `import` can already use it. The convention is to write them at the top of the file.
+
 ## Exported Variables
 
 An exported `var` is read-only outside its module: only the module itself can assign to it. Importers always see its **current** value.
