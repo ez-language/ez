@@ -7,6 +7,7 @@ pub fn lookup_ident(ident: &str) -> Token {
         "type" => Token::Type,
         "interface" => Token::Interface,
         "import" => Token::Import,
+        "export" => Token::Export,
         "from" => Token::From,
         "if" => Token::If,
         "else" => Token::Else,

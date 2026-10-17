@@ -219,8 +219,27 @@ impl Lexer {
             }
         }
 
+        // Exponent: `1e308`, `2.5E-3`.
+        let mut has_exponent = false;
+        if matches!(self.current(), Some('e' | 'E')) {
+            let digit_at = if matches!(self.peek(), Some('+' | '-')) { 2 } else { 1 };
+            if self
+                .input
+                .get(self.position + digit_at)
+                .is_some_and(|c| c.is_ascii_digit())
+            {
+                has_exponent = true;
+                for _ in 0..digit_at {
+                    self.advance();
+                }
+                while self.current().is_some_and(|c| c.is_ascii_digit()) {
+                    self.advance();
+                }
+            }
+        }
+
         let num_str: String = self.input[start..self.position].iter().collect();
-        if !has_dot {
+        if !has_dot && !has_exponent {
             if let Ok(value) = num_str.parse::<i64>() {
                 return Token::Int(value);
             }
@@ -320,6 +339,19 @@ mod tests {
     #[test]
     fn integers_and_floats_are_distinct() {
         assert_eq!(lex("42 2.5"), vec![Token::Int(42), Token::Float(2.5), Token::EOF]);
+    }
+
+    #[test]
+    fn scientific_notation() {
+        assert_eq!(
+            lex("1e3 2.5E-2 1e+2"),
+            vec![Token::Float(1000.0), Token::Float(0.025), Token::Float(100.0), Token::EOF]
+        );
+        // `e` not followed by digits is a separate identifier.
+        assert_eq!(
+            lex("2e"),
+            vec![Token::Int(2), Token::Identifier("e".to_string()), Token::EOF]
+        );
     }
 
     #[test]

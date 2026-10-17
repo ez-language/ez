@@ -11,8 +11,6 @@ pub enum Type {
     String,
     Boolean,
     Void,
-    /// Dynamic value (e.g. the result of `json.parse`): operations on it are checked at runtime.
-    Any,
     /// Not known yet (`None`, `[]`): compatible with anything and refined on later assignments.
     Unknown,
     /// Expression that never produces a value (`return`, `break`, `continue`).
@@ -46,7 +44,7 @@ impl Type {
     }
 
     pub fn is_dynamic(&self) -> bool {
-        matches!(self, Type::Any | Type::Unknown)
+        matches!(self, Type::Unknown)
     }
 
     pub fn contains_unknown(&self) -> bool {
@@ -203,7 +201,6 @@ impl fmt::Display for TypeDisplay<'_> {
             Type::String => write!(f, "string"),
             Type::Boolean => write!(f, "boolean"),
             Type::Void => write!(f, "void"),
-            Type::Any => write!(f, "any"),
             Type::Unknown => write!(f, "?"),
             Type::Never => write!(f, "never"),
             Type::List(inner) => write!(f, "{}[]", show(inner)),

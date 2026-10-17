@@ -1,51 +1,70 @@
 //! Built-in functions, methods and the standard library modules.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::rc::Rc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::runtime::interpreter::{as_float, some, Exec, Interpreter};
-use crate::runtime::value::{DateTime, FileHandle, Native, Value, VariantValue};
+use crate::runtime::value::{DateTime, FileHandle, Native, SumType, Value};
+use crate::semantic::builtin_sums::{builtin_sum, stdlib_functions, BUILTIN_SUMS};
 
-pub fn none() -> Value {
-    Value::Variant(Rc::new(VariantValue {
-        type_name: "Option".to_string(),
-        name: "None".to_string(),
-        field_names: Rc::new(vec![]),
-        values: vec![],
-    }))
+thread_local! {
+    static SUMS: RefCell<HashMap<&'static str, Rc<SumType>>> = RefCell::new(HashMap::new());
 }
 
-fn result(ok: bool, value: Value) -> Value {
-    let (name, field) = if ok { ("Ok", "value") } else { ("Err", "error") };
-    Value::Variant(Rc::new(VariantValue {
-        type_name: "Result".to_string(),
-        name: name.to_string(),
-        field_names: Rc::new(vec![field.to_string()]),
-        values: vec![value],
-    }))
+/// Runtime description of a built-in sum type (`Option`, `Json`, `FileError`...).
+pub fn sum(name: &str) -> Rc<SumType> {
+    let definition = builtin_sum(name);
+    SUMS.with(|sums| {
+        Rc::clone(sums.borrow_mut().entry(definition.name).or_insert_with(|| {
+            Rc::new(SumType {
+                name: definition.name.to_string(),
+                variants: definition
+                    .variants
+                    .iter()
+                    .map(|(variant, fields)| {
+                        (variant.to_string(), fields.iter().map(|(f, _)| f.to_string()).collect())
+                    })
+                    .collect(),
+            })
+        }))
+    })
+}
+
+/// A value of a built-in sum type: `variant("FileError", "NotFound", vec![...])`.
+fn variant(type_name: &str, name: &str, values: Vec<Value>) -> Value {
+    sum(type_name).make(name, values)
+}
+
+pub fn none() -> Value {
+    variant("Option", "None", vec![])
+}
+
+fn ok(value: Value) -> Value {
+    variant("Result", "Ok", vec![value])
+}
+
+fn err(value: Value) -> Value {
+    variant("Result", "Err", vec![value])
 }
 
 /// Members of a standard library module.
 pub fn module_members(module: &str) -> Vec<(String, Value)> {
-    let functions: &[&str] = match module {
-        "time" => &["sleep", "now", "monotonic"],
-        "file" => &["open"],
-        "datetime" => &["now", "today", "format", "parse"],
-        "math" => &["abs", "sqrt", "pow", "floor", "ceil", "round"],
-        "http" => &["get", "post", "put", "delete"],
-        "json" => &["parse", "stringify"],
-        "regex" => &["match", "search", "findAll", "replace"],
-        _ => &[],
-    };
-    let mut members: Vec<(String, Value)> = functions
+    let mut members: Vec<(String, Value)> = stdlib_functions(module)
         .iter()
         .map(|f| (f.to_string(), Value::Builtin(Rc::from(format!("{}.{}", module, f)))))
         .collect();
     if module == "math" {
         members.push(("pi".to_string(), Value::Float(std::f64::consts::PI)));
         members.push(("e".to_string(), Value::Float(std::f64::consts::E)));
+    }
+    for definition in BUILTIN_SUMS.iter().filter(|s| s.module == Some(module)) {
+        let sum = sum(definition.name);
+        for (name, _) in &sum.variants {
+            members.push((name.clone(), sum.constructor(name)));
+        }
     }
     members
 }
@@ -86,12 +105,79 @@ fn number_arg(interpreter: &Interpreter, args: &[Value], index: usize) -> Exec<f
     }
 }
 
+/// Converting a float that does not fit in an `int` is a representation limit: it panics.
 fn float_to_int(interpreter: &Interpreter, value: f64) -> Exec<Value> {
     if value.is_finite() && value.abs() < 9.2e18 {
         Ok(Value::Int(value as i64))
     } else {
-        Err(interpreter.error(format!("{} cannot be converted to int", value)))
+        Err(interpreter.error(format!("integer overflow: {} does not fit in an int", value)))
     }
+}
+
+/// `int('...')`: `Ok(n)`, `Err(InvalidNumber(text))` or `Err(OutOfRange(text))`.
+fn parse_int(text: &str) -> Value {
+    let trimmed = text.trim();
+    match trimmed.parse::<i64>() {
+        Ok(n) => ok(Value::Int(n)),
+        Err(_) => {
+            let digits = trimmed.strip_prefix(['-', '+']).unwrap_or(trimmed);
+            let failure = if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                "OutOfRange"
+            } else {
+                "InvalidNumber"
+            };
+            err(variant("ParseError", failure, vec![Value::str(text)]))
+        }
+    }
+}
+
+/// `float('...')`: only decimal notation is accepted (no `nan` or `inf`).
+fn parse_float(text: &str) -> Value {
+    let trimmed = text.trim();
+    let well_formed = !trimmed.is_empty()
+        && trimmed.chars().any(|c| c.is_ascii_digit())
+        && trimmed
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, '+' | '-' | '.' | 'e' | 'E'));
+    match trimmed.parse::<f64>() {
+        Ok(n) if well_formed && n.is_finite() => ok(Value::Float(n)),
+        Ok(_) if well_formed => err(variant("ParseError", "OutOfRange", vec![Value::str(text)])),
+        _ => err(variant("ParseError", "InvalidNumber", vec![Value::str(text)])),
+    }
+}
+
+/// Why a real power cannot be computed.
+pub enum PowFailure {
+    /// Domain problem: the result is a complex number (`(-8) ** 0.5`).
+    Complex,
+    /// Domain problem: `0 ** 0`.
+    Indeterminate,
+    /// `0 ** -1` is `1 / 0`: a bug, like any division by zero.
+    DivisionByZero,
+    /// Representation limit: the result does not fit in a float.
+    Overflow,
+}
+
+pub fn real_pow(x: f64, y: f64) -> Result<f64, PowFailure> {
+    if x == 0.0 && y == 0.0 {
+        return Err(PowFailure::Indeterminate);
+    }
+    if x == 0.0 && y < 0.0 {
+        return Err(PowFailure::DivisionByZero);
+    }
+    if x < 0.0 && y.fract() != 0.0 {
+        return Err(PowFailure::Complex);
+    }
+    let result = x.powf(y);
+    if result.is_finite() {
+        Ok(result)
+    } else {
+        Err(PowFailure::Overflow)
+    }
+}
+
+fn math_error(name: &str) -> Value {
+    err(variant("MathError", name, vec![]))
 }
 
 /// Calls the built-in function `name`.
@@ -124,6 +210,10 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
             }
             Ok(some(Value::str(&line)))
         }
+        "panic" => {
+            let message = str_arg(interpreter, &args, 0)?.to_string();
+            Err(interpreter.error(message))
+        }
         "range" => {
             let (start, end, step) = match args.len() {
                 1 => (0, int_arg(interpreter, &args, 0)?, 1),
@@ -152,27 +242,21 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
             Value::Int(n) => Ok(Value::Int(*n)),
             Value::Float(f) => float_to_int(interpreter, f.trunc()),
             Value::Bool(b) => Ok(Value::Int(*b as i64)),
-            Value::Str(s) => Ok(match s.trim().parse::<i64>() {
-                Ok(n) => result(true, Value::Int(n)),
-                Err(_) => result(false, Value::str("not a valid int")),
-            }),
+            Value::Str(s) => Ok(parse_int(s)),
             other => Err(interpreter.error(format!("cannot convert {} to int", other.type_name()))),
         },
         "float" => match &args[0] {
             Value::Int(n) => Ok(Value::Float(*n as f64)),
             Value::Float(f) => Ok(Value::Float(*f)),
             Value::Bool(b) => Ok(Value::Float(*b as i64 as f64)),
-            Value::Str(s) => Ok(match s.trim().parse::<f64>() {
-                Ok(n) if !s.trim().is_empty() => result(true, Value::Float(n)),
-                _ => result(false, Value::str("not a valid float")),
-            }),
+            Value::Str(s) => Ok(parse_float(s)),
             other => Err(interpreter.error(format!("cannot convert {} to float", other.type_name()))),
         },
         "string" => Ok(Value::str(&args[0].display())),
 
         "time.sleep" => {
             let seconds = number_arg(interpreter, &args, 0)?;
-            if seconds > 0.0 && seconds.is_finite() {
+            if seconds > 0.0 {
                 let _ = interpreter.out.flush();
                 std::thread::sleep(Duration::from_secs_f64(seconds));
             }
@@ -196,14 +280,14 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
                     )))
                 }
             };
-            let file = options
-                .open(&path)
-                .map_err(|e| interpreter.error(format!("cannot open '{}': {}", path, e)))?;
-            Ok(Value::Native(Rc::new(RefCell::new(Native::File(FileHandle {
-                path,
-                mode,
-                file: Some(file),
-            })))))
+            match options.open(&path) {
+                Ok(file) => Ok(ok(Value::Native(Rc::new(RefCell::new(Native::File(FileHandle {
+                    path,
+                    mode,
+                    file: Some(file),
+                })))))),
+                Err(error) => Ok(err(file_error(&path, &error))),
+            }
         }
 
         "datetime.now" => Ok(Value::Native(Rc::new(RefCell::new(Native::DateTime(
@@ -222,10 +306,17 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
         "datetime.parse" => {
             let text = str_arg(interpreter, &args, 0)?;
             let pattern = str_arg(interpreter, &args, 1)?;
-            match parse_datetime(text, pattern) {
-                Ok(timestamp) => Ok(Value::Int(timestamp)),
-                Err(message) => Err(interpreter.error(message)),
-            }
+            Ok(match parse_datetime(text, pattern) {
+                Ok(timestamp) => ok(Value::Int(timestamp)),
+                Err(DateFailure::PatternMismatch) => err(variant(
+                    "DateError",
+                    "PatternMismatch",
+                    vec![Value::str(text), Value::str(pattern)],
+                )),
+                Err(DateFailure::InvalidDate) => {
+                    err(variant("DateError", "InvalidDate", vec![Value::str(text)]))
+                }
+            })
         }
 
         "math.abs" => match &args[0] {
@@ -238,14 +329,20 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
         "math.sqrt" => {
             let x = number_arg(interpreter, &args, 0)?;
             if x < 0.0 {
-                return Err(interpreter.error("square root of a negative number"));
+                return Ok(math_error("Complex"));
             }
-            Ok(Value::Float(x.sqrt()))
+            Ok(ok(Value::Float(x.sqrt())))
         }
         "math.pow" => {
             let x = number_arg(interpreter, &args, 0)?;
             let y = number_arg(interpreter, &args, 1)?;
-            Ok(Value::Float(x.powf(y)))
+            match real_pow(x, y) {
+                Ok(result) => Ok(ok(Value::Float(result))),
+                Err(PowFailure::Complex) => Ok(math_error("Complex")),
+                Err(PowFailure::Indeterminate) => Ok(math_error("Indeterminate")),
+                Err(PowFailure::DivisionByZero) => Err(interpreter.error("division by zero")),
+                Err(PowFailure::Overflow) => Err(interpreter.error("float overflow")),
+            }
         }
         "math.floor" | "math.ceil" | "math.round" => {
             let x = number_arg(interpreter, &args, 0)?;
@@ -259,23 +356,44 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
 
         "http.get" | "http.delete" => {
             let url = str_arg(interpreter, &args, 0)?.to_string();
-            http_request(interpreter, &name[5..], &url, None)
+            Ok(http_request(&name[5..], &url, None))
         }
         "http.post" | "http.put" => {
             let url = str_arg(interpreter, &args, 0)?.to_string();
             let body = str_arg(interpreter, &args, 1)?.to_string();
-            http_request(interpreter, &name[5..], &url, Some(body))
+            Ok(http_request(&name[5..], &url, Some(body)))
         }
 
         "json.parse" => {
             let text = str_arg(interpreter, &args, 0)?;
-            json::parse(text).map_err(|message| interpreter.error(format!("invalid JSON: {}", message)))
+            Ok(match json::parse(text) {
+                Ok(value) => ok(value),
+                Err(error) => err(error),
+            })
         }
         "json.stringify" => {
             let mut out = String::new();
             json::stringify(&args[0], &mut out).map_err(|message| interpreter.error(message))?;
             Ok(Value::str(&out))
         }
+        "json.get" => {
+            let key = str_arg(interpreter, &args, 1)?;
+            Ok(match json_payload(&args[0], "Object") {
+                Some(Value::Object(fields)) => match fields.borrow().get(key) {
+                    Some(value) => some(value.clone()),
+                    None => none(),
+                },
+                _ => none(),
+            })
+        }
+        "json.asString" => Ok(json_payload(&args[0], "String").map_or_else(none, some)),
+        "json.asInt" => Ok(json_payload(&args[0], "Int").map_or_else(none, some)),
+        "json.asBool" => Ok(json_payload(&args[0], "Bool").map_or_else(none, some)),
+        "json.asFloat" => Ok(match (json_payload(&args[0], "Float"), json_payload(&args[0], "Int")) {
+            (Some(value), _) => some(value),
+            (_, Some(Value::Int(n))) => some(Value::Float(n as f64)),
+            _ => none(),
+        }),
 
         "regex.match" => {
             let pattern = str_arg(interpreter, &args, 0)?;
@@ -309,6 +427,26 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
         }
 
         other => Err(interpreter.error(format!("unknown built-in function '{}'", other))),
+    }
+}
+
+/// The payload of a `Json` value if it is the variant `name` (`String('a')` → `'a'`).
+fn json_payload(value: &Value, name: &str) -> Option<Value> {
+    match value {
+        Value::Variant(v) if v.name == name => v.values.first().cloned(),
+        _ => None,
+    }
+}
+
+fn file_error(path: &str, error: &std::io::Error) -> Value {
+    use std::io::ErrorKind;
+    let path_value = Value::str(path);
+    match error.kind() {
+        ErrorKind::NotFound => variant("FileError", "NotFound", vec![path_value]),
+        ErrorKind::PermissionDenied => variant("FileError", "PermissionDenied", vec![path_value]),
+        ErrorKind::IsADirectory => variant("FileError", "IsDirectory", vec![path_value]),
+        ErrorKind::InvalidData => variant("FileError", "InvalidUtf8", vec![path_value]),
+        _ => variant("FileError", "Io", vec![path_value, Value::str(&error.to_string())]),
     }
 }
 
@@ -410,9 +548,10 @@ pub fn native_method(
                 return Err(interpreter.error(format!("file '{}' was not opened for reading ('r')", path)));
             }
             let mut content = String::new();
-            file.read_to_string(&mut content)
-                .map_err(|e| interpreter.error(format!("cannot read '{}': {}", path, e)))?;
-            Ok(Value::str(&content))
+            Ok(match file.read_to_string(&mut content) {
+                Ok(_) => ok(Value::str(&content)),
+                Err(error) => err(file_error(&path, &error)),
+            })
         }
         "write" => {
             if mode == "r" {
@@ -422,9 +561,10 @@ pub fn native_method(
                 )));
             }
             let text = str_arg(interpreter, &args, 0)?;
-            file.write_all(text.as_bytes())
-                .map_err(|e| interpreter.error(format!("cannot write '{}': {}", path, e)))?;
-            Ok(Value::Void)
+            Ok(match file.write_all(text.as_bytes()) {
+                Ok(()) => ok(Value::Void),
+                Err(error) => err(file_error(&path, &error)),
+            })
         }
         other => Err(interpreter.error(format!("File has no method '{}'", other))),
     }
@@ -538,7 +678,13 @@ pub fn format_datetime(datetime: &DateTime, pattern: &str) -> String {
     out
 }
 
-pub fn parse_datetime(text: &str, pattern: &str) -> Result<i64, String> {
+#[derive(Debug)]
+pub enum DateFailure {
+    PatternMismatch,
+    InvalidDate,
+}
+
+pub fn parse_datetime(text: &str, pattern: &str) -> Result<i64, DateFailure> {
     let chars: Vec<char> = text.chars().collect();
     let mut position = 0;
     let mut datetime = DateTime {
@@ -549,7 +695,7 @@ pub fn parse_datetime(text: &str, pattern: &str) -> Result<i64, String> {
         minute: 0,
         second: 0,
     };
-    let mismatch = || format!("'{}' does not match the pattern '{}'", text, pattern);
+    let mismatch = || DateFailure::PatternMismatch;
     for token in date_tokens(pattern) {
         match token {
             Err(c) => {
@@ -587,7 +733,7 @@ pub fn parse_datetime(text: &str, pattern: &str) -> Result<i64, String> {
         && datetime.minute < 60
         && datetime.second < 60;
     if !valid {
-        return Err(format!("invalid date '{}'", text));
+        return Err(DateFailure::InvalidDate);
     }
     Ok(days_from_civil(datetime.year, datetime.month, datetime.day) * 86_400
         + datetime.hour * 3600
@@ -599,7 +745,30 @@ pub fn parse_datetime(text: &str, pattern: &str) -> Result<i64, String> {
 // http
 // ----------------------------------------------------------------------
 
-fn http_request(interpreter: &mut Interpreter, method: &str, url: &str, body: Option<String>) -> Exec<Value> {
+fn http_error(url: &str, error: &ureq::Transport) -> Value {
+    use ureq::ErrorKind;
+    let message = error.to_string();
+    let lower = message.to_lowercase();
+    let url_value = Value::str(url);
+    let with_message = |name: &str| variant("HttpError", name, vec![Value::str(url), Value::str(&message)]);
+    match error.kind() {
+        ErrorKind::InvalidUrl | ErrorKind::UnknownScheme => {
+            variant("HttpError", "InvalidUrl", vec![url_value])
+        }
+        _ if lower.contains("timed out") || lower.contains("timeout") => {
+            variant("HttpError", "Timeout", vec![url_value])
+        }
+        _ if lower.contains("tls") || lower.contains("certificate") => with_message("Tls"),
+        ErrorKind::TooManyRedirects | ErrorKind::BadStatus | ErrorKind::BadHeader => {
+            with_message("InvalidResponse")
+        }
+        _ => with_message("ConnectionFailed"),
+    }
+}
+
+/// Sends a request. 4xx and 5xx statuses are still `Ok(Response)`: only transport failures are
+/// errors.
+fn http_request(method: &str, url: &str, body: Option<String>) -> Value {
     let request = ureq::request(&method.to_uppercase(), url);
     let response = match body {
         Some(body) => {
@@ -616,16 +785,20 @@ fn http_request(interpreter: &mut Interpreter, method: &str, url: &str, body: Op
     let response = match response {
         Ok(response) => response,
         Err(ureq::Error::Status(_, response)) => response,
-        Err(error) => return Err(interpreter.error(format!("HTTP request to '{}' failed: {}", url, error))),
+        Err(ureq::Error::Transport(error)) => return err(http_error(url, &error)),
     };
     let status = response.status() as i64;
-    let body = response
-        .into_string()
-        .map_err(|e| interpreter.error(format!("cannot read the response of '{}': {}", url, e)))?;
-    Ok(Value::object(vec![
-        ("status".to_string(), Value::Int(status)),
-        ("body".to_string(), Value::str(&body)),
-    ]))
+    match response.into_string() {
+        Ok(body) => ok(Value::object(vec![
+            ("status".to_string(), Value::Int(status)),
+            ("body".to_string(), Value::str(&body)),
+        ])),
+        Err(error) => err(variant(
+            "HttpError",
+            "InvalidResponse",
+            vec![Value::str(url), Value::str(&error.to_string())],
+        )),
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -658,21 +831,54 @@ fn match_object(input: &str, found: &regex::Match) -> Value {
 // ----------------------------------------------------------------------
 
 mod json {
-    use super::{none, Value};
-    use crate::runtime::value::Native;
+    use super::{variant, Value};
     use std::fmt::Write as _;
 
-    pub fn parse(text: &str) -> Result<Value, String> {
+    fn json(name: &str, values: Vec<Value>) -> Value {
+        variant("Json", name, values)
+    }
+
+    /// Parses JSON into a `Json` value; on failure, returns a `JsonError` value.
+    pub fn parse(text: &str) -> Result<Value, Value> {
         let mut parser = JsonParser {
             chars: text.chars().collect(),
             position: 0,
         };
-        let value = parser.value()?;
-        parser.skip_whitespace();
-        if parser.position != parser.chars.len() {
-            return Err(format!("unexpected character at position {}", parser.position));
+        let result = parser.value().and_then(|value| {
+            parser.skip_whitespace();
+            if parser.position == parser.chars.len() {
+                Ok(value)
+            } else {
+                Err(parser.syntax("unexpected character after the JSON value"))
+            }
+        });
+        result.map_err(|failure| failure.into_value(&parser.chars))
+    }
+
+    enum Failure {
+        Syntax(String, usize),
+        NumberOutOfRange(String, usize),
+    }
+
+    impl Failure {
+        /// `JsonError` value with a 1-based line and column.
+        fn into_value(self, chars: &[char]) -> Value {
+            let position = match &self {
+                Failure::Syntax(_, p) | Failure::NumberOutOfRange(_, p) => *p,
+            };
+            let before = &chars[..position.min(chars.len())];
+            let line = before.iter().filter(|c| **c == '\n').count() + 1;
+            let column = before.iter().rev().take_while(|c| **c != '\n').count() + 1;
+            let (name, text) = match self {
+                Failure::Syntax(message, _) => ("Syntax", message),
+                Failure::NumberOutOfRange(number, _) => ("NumberOutOfRange", number),
+            };
+            variant(
+                "JsonError",
+                name,
+                vec![Value::str(&text), Value::Int(line as i64), Value::Int(column as i64)],
+            )
         }
-        Ok(value)
     }
 
     struct JsonParser {
@@ -681,58 +887,62 @@ mod json {
     }
 
     impl JsonParser {
+        fn syntax(&self, message: &str) -> Failure {
+            Failure::Syntax(message.to_string(), self.position)
+        }
+
         fn skip_whitespace(&mut self) {
             while matches!(self.chars.get(self.position), Some(c) if c.is_whitespace()) {
                 self.position += 1;
             }
         }
 
-        fn expect(&mut self, c: char) -> Result<(), String> {
+        fn expect(&mut self, c: char) -> Result<(), Failure> {
             self.skip_whitespace();
             if self.chars.get(self.position) == Some(&c) {
                 self.position += 1;
                 Ok(())
             } else {
-                Err(format!("expected '{}' at position {}", c, self.position))
+                Err(self.syntax(&format!("expected '{}'", c)))
             }
         }
 
-        fn literal(&mut self, word: &str, value: Value) -> Result<Value, String> {
+        fn literal(&mut self, word: &str, value: Value) -> Result<Value, Failure> {
             for c in word.chars() {
                 if self.chars.get(self.position) != Some(&c) {
-                    return Err(format!("invalid literal at position {}", self.position));
+                    return Err(self.syntax("invalid literal"));
                 }
                 self.position += 1;
             }
             Ok(value)
         }
 
-        fn value(&mut self) -> Result<Value, String> {
+        fn value(&mut self) -> Result<Value, Failure> {
             self.skip_whitespace();
             match self.chars.get(self.position) {
                 Some('{') => {
                     self.position += 1;
-                    let mut fields = Vec::new();
+                    let mut fields: Vec<(String, Value)> = Vec::new();
                     self.skip_whitespace();
                     if self.chars.get(self.position) == Some(&'}') {
                         self.position += 1;
-                        return Ok(Value::object(fields));
+                        return Ok(json("Object", vec![Value::object(fields)]));
                     }
                     loop {
                         self.skip_whitespace();
                         let key = self.string()?;
                         self.expect(':')?;
                         let value = self.value()?;
-                        fields.retain(|(k, _): &(String, Value)| *k != key);
+                        fields.retain(|(k, _)| *k != key);
                         fields.push((key, value));
                         self.skip_whitespace();
                         match self.chars.get(self.position) {
                             Some(',') => self.position += 1,
                             Some('}') => {
                                 self.position += 1;
-                                return Ok(Value::object(fields));
+                                return Ok(json("Object", vec![Value::object(fields)]));
                             }
-                            _ => return Err(format!("expected ',' or '}}' at position {}", self.position)),
+                            _ => return Err(self.syntax("expected ',' or '}'")),
                         }
                     }
                 }
@@ -742,7 +952,7 @@ mod json {
                     self.skip_whitespace();
                     if self.chars.get(self.position) == Some(&']') {
                         self.position += 1;
-                        return Ok(Value::list(items));
+                        return Ok(json("Array", vec![Value::list(items)]));
                     }
                     loop {
                         items.push(self.value()?);
@@ -751,23 +961,24 @@ mod json {
                             Some(',') => self.position += 1,
                             Some(']') => {
                                 self.position += 1;
-                                return Ok(Value::list(items));
+                                return Ok(json("Array", vec![Value::list(items)]));
                             }
-                            _ => return Err(format!("expected ',' or ']' at position {}", self.position)),
+                            _ => return Err(self.syntax("expected ',' or ']'")),
                         }
                     }
                 }
-                Some('"') => Ok(Value::str(&self.string()?)),
-                Some('t') => self.literal("true", Value::Bool(true)),
-                Some('f') => self.literal("false", Value::Bool(false)),
-                Some('n') => self.literal("null", none()),
+                Some('"') => Ok(json("String", vec![Value::str(&self.string()?)])),
+                Some('t') => self.literal("true", json("Bool", vec![Value::Bool(true)])),
+                Some('f') => self.literal("false", json("Bool", vec![Value::Bool(false)])),
+                Some('n') => self.literal("null", json("Null", vec![])),
                 Some(c) if *c == '-' || c.is_ascii_digit() => self.number(),
-                Some(c) => Err(format!("unexpected character '{}' at position {}", c, self.position)),
-                None => Err("unexpected end of input".to_string()),
+                Some(c) => Err(self.syntax(&format!("unexpected character '{}'", c))),
+                None => Err(self.syntax("unexpected end of input")),
             }
         }
 
-        fn number(&mut self) -> Result<Value, String> {
+        /// Numbers without `.`, `e` or `E` are `Int`; the others are `Float`.
+        fn number(&mut self) -> Result<Value, Failure> {
             let start = self.position;
             while matches!(
                 self.chars.get(self.position),
@@ -776,19 +987,28 @@ mod json {
                 self.position += 1;
             }
             let text: String = self.chars[start..self.position].iter().collect();
+            let out_of_range = || Failure::NumberOutOfRange(text.clone(), start);
+            let invalid = || Failure::Syntax(format!("invalid number '{}'", text), start);
             if !text.contains(['.', 'e', 'E']) {
-                if let Ok(n) = text.parse::<i64>() {
-                    return Ok(Value::Int(n));
+                let digits = text.strip_prefix('-').unwrap_or(&text);
+                if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+                    return Err(invalid());
                 }
+                return match text.parse::<i64>() {
+                    Ok(n) => Ok(json("Int", vec![Value::Int(n)])),
+                    Err(_) => Err(out_of_range()),
+                };
             }
-            text.parse::<f64>()
-                .map(Value::Float)
-                .map_err(|_| format!("invalid number '{}'", text))
+            match text.parse::<f64>() {
+                Ok(n) if n.is_finite() => Ok(json("Float", vec![Value::Float(n)])),
+                Ok(_) => Err(out_of_range()),
+                Err(_) => Err(invalid()),
+            }
         }
 
-        fn string(&mut self) -> Result<String, String> {
+        fn string(&mut self) -> Result<String, Failure> {
             if self.chars.get(self.position) != Some(&'"') {
-                return Err(format!("expected a string at position {}", self.position));
+                return Err(self.syntax("expected a string"));
             }
             self.position += 1;
             let mut out = String::new();
@@ -816,29 +1036,33 @@ mod json {
                                 {
                                     self.position += 2;
                                     let low = self.hex4()?;
-                                    char::from_u32(0x10000 + ((code - 0xD800) << 10) + (low.wrapping_sub(0xDC00)))
+                                    char::from_u32(
+                                        0x10000 + ((code - 0xD800) << 10) + low.wrapping_sub(0xDC00),
+                                    )
                                 } else {
                                     char::from_u32(code)
                                 };
                                 out.push(c.unwrap_or('\u{FFFD}'));
                             }
                             Some(other) => out.push(other),
-                            None => return Err("unterminated string".to_string()),
+                            None => return Err(self.syntax("unterminated string")),
                         }
                     }
                     Some(c) => {
                         out.push(c);
                         self.position += 1;
                     }
-                    None => return Err("unterminated string".to_string()),
+                    None => return Err(self.syntax("unterminated string")),
                 }
             }
         }
 
-        fn hex4(&mut self) -> Result<u32, String> {
+        fn hex4(&mut self) -> Result<u32, Failure> {
             let text: String = self.chars.iter().skip(self.position).take(4).collect();
+            let code = u32::from_str_radix(&text, 16)
+                .map_err(|_| self.syntax(&format!("invalid escape '\\u{}'", text)))?;
             self.position += 4;
-            u32::from_str_radix(&text, 16).map_err(|_| format!("invalid escape '\\u{}'", text))
+            Ok(code)
         }
     }
 
@@ -860,23 +1084,37 @@ mod json {
         out.push('"');
     }
 
+    /// Writes a `Json` value. Floats always keep a `.` or an exponent, so that parsing the text
+    /// back gives a `Float` again.
     pub fn stringify(value: &Value, out: &mut String) -> Result<(), String> {
-        match value {
-            Value::Int(n) => {
-                let _ = write!(out, "{}", n);
-            }
-            Value::Float(f) => {
-                if !f.is_finite() {
-                    return Err(format!("{} cannot be represented in JSON", f));
-                }
-                let _ = write!(out, "{}", f);
-            }
-            Value::Str(s) => write_string(s, out),
-            Value::Bool(b) => {
+        let variant = match value {
+            Value::Variant(variant) if variant.sum.name == "Json" => variant,
+            other => return Err(format!("expected a Json value, found {}", other.type_name())),
+        };
+        match (variant.name.as_str(), variant.values.first()) {
+            ("Null", _) => out.push_str("null"),
+            ("Bool", Some(Value::Bool(b))) => {
                 let _ = write!(out, "{}", b);
             }
-            Value::Void => out.push_str("null"),
-            Value::List(items) => {
+            ("Int", Some(Value::Int(n))) => {
+                let _ = write!(out, "{}", n);
+            }
+            ("Float", Some(Value::Float(f))) => {
+                let text = if f.abs() >= 1e16 {
+                    format!("{:e}", f)
+                } else {
+                    format!("{}", f)
+                };
+                out.push_str(&text);
+                if !text.contains(['.', 'e', 'E']) {
+                    out.push_str(".0");
+                }
+            }
+            ("Float", Some(Value::Int(n))) => {
+                let _ = write!(out, "{}.0", n);
+            }
+            ("String", Some(Value::Str(s))) => write_string(s, out),
+            ("Array", Some(Value::List(items))) => {
                 out.push('[');
                 for (i, item) in items.borrow().iter().enumerate() {
                     if i > 0 {
@@ -886,7 +1124,7 @@ mod json {
                 }
                 out.push(']');
             }
-            Value::Object(object) => {
+            ("Object", Some(Value::Object(object))) => {
                 out.push('{');
                 for (i, (key, value)) in object.borrow().fields.iter().enumerate() {
                     if i > 0 {
@@ -898,31 +1136,7 @@ mod json {
                 }
                 out.push('}');
             }
-            Value::Variant(variant) => match (variant.name.as_str(), variant.values.as_slice()) {
-                ("None", []) => out.push_str("null"),
-                ("Some", [inner]) => stringify(inner, out)?,
-                (name, []) => write_string(name, out),
-                (name, values) => {
-                    out.push('{');
-                    write_string("type", out);
-                    out.push(':');
-                    write_string(name, out);
-                    for (field, value) in variant.field_names.iter().zip(values) {
-                        out.push(',');
-                        write_string(field, out);
-                        out.push(':');
-                        stringify(value, out)?;
-                    }
-                    out.push('}');
-                }
-            },
-            Value::Native(native) => match &*native.borrow() {
-                Native::DateTime(datetime) => write_string(&datetime.to_string(), out),
-                Native::File(_) => return Err("a File cannot be converted to JSON".to_string()),
-            },
-            other => {
-                return Err(format!("a value of type {} cannot be converted to JSON", other.type_name()))
-            }
+            (name, _) => return Err(format!("invalid Json value '{}'", name)),
         }
         Ok(())
     }
@@ -953,6 +1167,11 @@ mod tests {
         let mut out = String::new();
         json::stringify(&value, &mut out).unwrap();
         assert_eq!(out, r#"{"name":"ezlang","year":2025,"tags":[1,2.5,null]}"#);
+
+        let value = json::parse("[2.0, 1e3]").unwrap();
+        let mut out = String::new();
+        json::stringify(&value, &mut out).unwrap();
+        assert_eq!(out, "[2.0,1000.0]");
     }
 
     #[test]

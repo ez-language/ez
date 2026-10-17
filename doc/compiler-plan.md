@@ -2,7 +2,7 @@
 
 This document plans the path from the current implementation to a **self-hosted compiler**: an ez compiler written in ez that produces native binaries. It records the language decisions already made and the ones still open.
 
-> Status: planning. Nothing in this document is implemented yet unless stated otherwise.
+> Status: the [decisions](#decisions) below are implemented in the current (interpreted) implementation, except where noted. The phases that build the compiler have not started.
 
 ---
 
@@ -157,11 +157,6 @@ type DateError = {
     InvalidDate(text: string)
 }
 
-// regex
-type RegexError = {
-    InvalidPattern(pattern: string, message: string)
-}
-
 // int(x) and float(x) with a string
 type ParseError = {
     InvalidNumber(text: string)
@@ -176,6 +171,8 @@ type MathError = {
 ```
 
 `time` has no error type. `input()` keeps returning `Option[string]`.
+
+`regex` will get `RegexError = { InvalidPattern(pattern: string, message: string) }` together with `regex.compile` (see [Open decisions](#open-decisions)). Until then, an invalid pattern panics.
 
 ### No NaN, no infinity
 
@@ -197,6 +194,10 @@ One rule decides how numeric failures are reported:
 | **Domain problem** | The result does not exist in the real numbers | `Err(MathError)` | `math.sqrt(-1)` → `Complex`, `math.pow(0, 0)` → `Indeterminate` |
 
 Operators cannot return a `Result`, so they always panic, including on domain problems such as division by zero.
+
+**Division by zero always panics**, in operators and in functions alike. This includes its equivalents, such as `math.pow(0, -1)` (which is `1 / 0`): it is a bug, like `1 / 0`, so it is not a `MathError` variant.
+
+Float literals support scientific notation (`6.022e23`).
 
 ### Division (already implemented)
 
@@ -282,4 +283,3 @@ Notes:
     -   `file.open(path, mode)` with `type Mode = { Read  Write  Append }` instead of `'r'`, `'w'`, `'a'`. Reading a file opened for writing, or using a closed file, panics.
     -   `regex.compile(pattern) -> Result[Regex, RegexError]`, with infallible methods on `Regex`.
     -   A `.message()` method on every standard library error type, returning a human-readable text.
-8.  **`math.pow(0, y)` with a negative `y`**: the result is not a real number (like `1 / 0`), but it is neither `Complex` nor `Indeterminate`. Options: panic, as division by zero; or a new `MathError` variant such as `Undefined`.

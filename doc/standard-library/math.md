@@ -11,7 +11,7 @@ The `math` module provides mathematical functions and constants.
     Returns the square root of `x`. Fails with `Complex` when `x` is negative.
 
 -   `pow(x: number, y: number) -> Result[float, MathError]`  
-    Returns `x` raised to the power of `y`. Fails with `Complex` when `x` is negative and `y` is not an integer (e.g. `pow(-8, 0.5)`), and with `Indeterminate` for `pow(0, 0)`.
+    Returns `x` raised to the power of `y`. Fails with `Complex` when `x` is negative and `y` is not an integer (e.g. `pow(-8, 0.5)`), and with `Indeterminate` for `pow(0, 0)`. `pow(0, y)` with a negative `y` is a division by zero (`1 / 0`): it panics.
 
 -   `floor(x: number) -> number`  
     Returns the largest integer less than or equal to `x`.
@@ -28,6 +28,7 @@ The `math` module follows one rule:
 
 -   **Domain problems return a `MathError`.** The result does not exist in the real numbers.
 -   **Representation limits panic.** The result exists, but does not fit in an `int` or a `float` (e.g. `math.pow(10, 400)`, or `math.round(1e300)` as an `int`).
+-   **Division by zero panics**, in operators and in functions alike (e.g. `math.pow(0, -1)`).
 
 ```ez
 type MathError = {

@@ -300,12 +300,17 @@ fn string_interpolation() {
 fn conversion_methods() {
     assert_eq!(
         run("print(int('0'), int('abc'), float('0'), string(0), int(3.9), float(2))"),
-        "Ok(0) Err('not a valid int') Ok(0.0) 0 3 2.0\n"
+        "Ok(0) Err(InvalidNumber('abc')) Ok(0.0) 0 3 2.0\n"
+    );
+    assert_eq!(
+        run("print(int('99999999999999999999'), float('1e400'), float('nan'), float('inf'))"),
+        "Err(OutOfRange('99999999999999999999')) Err(OutOfRange('1e400')) Err(InvalidNumber('nan')) Err(InvalidNumber('inf'))\n"
     );
     let source = r#"
         match (int('42')) {
             Ok(value) => print(value + 1)
-            Err(error) => print(error)
+            Err(InvalidNumber(text)) => print(`not a number: ${text}`)
+            Err(OutOfRange(text)) => print(`too large: ${text}`)
         }
     "#;
     assert_eq!(run(source), "43\n");
@@ -803,17 +808,27 @@ fn modules_and_imports() {
         r#"
         // file: math.ez
 
-        function add(a: int, b: int): int {
+        export function add(a: int, b: int): int {
             return a + b
         }
 
-        function subtract(a: int, b: int): int {
+        export function subtract(a: int, b: int): int {
             return a - b
         }
 
-        type Shape = {
+        function clamp(x: int): int {
+            return x
+        }
+
+        export type Shape = {
             Circle(radius: float)
             Square(side: float)
+        }
+
+        export var count = 0
+
+        export function increment() {
+            count += 1
         }
         "#,
     )
@@ -822,7 +837,7 @@ fn modules_and_imports() {
         // file: main.ez
 
         import math from 'math.ez'
-        import { add, subtract, Shape } from 'math.ez'
+        import { add, subtract, Shape, count, increment } from 'math.ez'
 
         result: int = math.add(5, 10)
 
@@ -831,13 +846,37 @@ fn modules_and_imports() {
         s: Shape = Circle(1.0)
         t: math.Shape = math.Square(2.0)
         print(s, t)
+
+        increment()
+        math.increment()
+        print(count, math.count) // always the current value
     "#;
     let (output, result) = execute(source, "", &dir.join("main.ez"));
     result.unwrap();
-    assert_eq!(output, "15\n15 -5\nCircle(1.0) Square(2.0)\n");
+    assert_eq!(output, "15\n15 -5\nCircle(1.0) Square(2.0)\n2 2\n");
 
-    let (_, result) = execute("import { nope } from 'math.ez'", "", &dir.join("main.ez"));
-    assert!(result.unwrap_err().to_string().contains("has no member 'nope'"));
+    let fails = |source: &str, fragment: &str| {
+        let (_, result) = execute(source, "", &dir.join("main.ez"));
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains(fragment), "expected {:?} in {:?}", fragment, error);
+    };
+    fails("import { nope } from 'math.ez'", "has no member 'nope'");
+    fails("import { clamp } from 'math.ez'", "'clamp' is not exported by 'math.ez'");
+    fails("import math from 'math.ez'\nprint(math.clamp(1))", "'clamp' is not exported by 'math.ez'");
+    fails("import { count } from 'math.ez'\ncount = 5", "'count' is read-only outside 'math.ez'");
+    fails("import math from 'math.ez'\nmath.count = 5", "'count' is read-only outside 'math.ez'");
+}
+
+#[test]
+fn export_rules() {
+    assert_error("function f() {\n export const x = 1\n}", "only allowed at the top level");
+    assert_error("export x = 1", "expected 'function', 'const', 'var', 'type' or 'interface'");
+    assert_error(
+        "type Hidden = { value: int }\nexport function make(): Hidden { return { value: 1 } }",
+        "uses the private type 'Hidden'",
+    );
+    // Exports of the main file are allowed (and simply unused).
+    assert_eq!(run("export const answer = 42\nprint(answer)"), "42\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -872,26 +911,37 @@ fn stdlib_file() {
         r#"
         import file
 
-        f = file.open('{path}', 'w')
+        match (file.open('{path}', 'w')) {{
+            Ok(f) => {{
+                print(f.write('Hello world!'))
+                f.close()
+            }}
+            Err(error) => print(error)
+        }}
 
-        f.write('Hello world!')
-        f.close()
+        match (file.open('{path}', 'r')) {{
+            Ok(f) => {{
+                match (f.read()) {{
+                    Ok(content) => print(content)
+                    Err(error) => print(error)
+                }}
+                f.close()
+            }}
+            Err(error) => print(error)
+        }}
 
-        f = file.open('{path}', 'a')
-        f.write(' Bye!')
-        f.close()
-
-        f = file.open('{path}', 'r')
-
-        content = f.read()
-
-        print(content)
-
-        f.close()
+        match (file.open('/nonexistent/notes.txt', 'r')) {{
+            Ok(_) => print('opened?')
+            Err(NotFound(missing)) => print(`not found: ${{missing}}`)
+            Err(error) => print(error)
+        }}
         "#
     );
-    assert_eq!(run(&source), "Hello world! Bye!\n");
-    assert_error("import file\nf = file.open('/nonexistent/x.txt', 'r')", "cannot open");
+    assert_eq!(
+        run(&source),
+        "Ok(void)\nHello world!\nnot found: /nonexistent/notes.txt\n"
+    );
+    assert_error("import file\nf = file.open('x', 'q')", "invalid file mode");
 }
 
 #[test]
@@ -903,15 +953,22 @@ fn stdlib_datetime() {
 
         print(date.length())
 
-        timestamp = datetime.parse('2025-04-20', 'YYYY-MM-DD')
-
-        print(datetime.format(timestamp, 'DD/MM/YYYY'))
-        print(datetime.format(timestamp + 3661, 'yyyy-mm-dd hh:min:ss'))
+        match (datetime.parse('2025-04-20', 'YYYY-MM-DD')) {
+            Ok(timestamp) => {
+                print(datetime.format(timestamp, 'DD/MM/YYYY'))
+                print(datetime.format(timestamp + 3661, 'yyyy-mm-dd hh:min:ss'))
+            }
+            Err(error) => print(error)
+        }
+        print(datetime.parse('2025-02-30', 'YYYY-MM-DD'), datetime.parse('20/04', 'YYYY-MM-DD'))
 
         now = datetime.now()
         print(now.year >= 2025, now.month >= 1 and now.month <= 12)
     "#;
-    assert_eq!(run(source), "10\n20/04/2025\n2025-04-20 01:01:01\ntrue true\n");
+    assert_eq!(
+        run(source),
+        "10\n20/04/2025\n2025-04-20 01:01:01\nErr(InvalidDate('2025-02-30')) Err(PatternMismatch('20/04', 'YYYY-MM-DD'))\ntrue true\n"
+    );
 }
 
 #[test]
@@ -919,13 +976,54 @@ fn stdlib_math() {
     let source = r#"
         import math
 
-        area: float = math.pi * math.pow(5, 2)
+        match (math.pow(5, 2)) {
+            Ok(squared) => print(math.pi * squared)
+            Err(error) => print(error)
+        }
 
-        print(area)
-        print(math.abs(-3), math.abs(-2.5), math.sqrt(16), math.floor(2.7), math.ceil(2.1), math.round(2.5))
+        match (math.sqrt(-1)) {
+            Ok(root) => print(root)
+            Err(Complex) => print('no real square root')
+            Err(Indeterminate) => print('indeterminate')
+        }
+        print(math.sqrt(16), math.pow(-8, 0.5), math.pow(0, 0), math.pow(-2, 3))
+        print(math.abs(-3), math.abs(-2.5), math.floor(2.7), math.ceil(2.1), math.round(2.5))
         print(math.e > 2.71)
     "#;
-    assert_eq!(run(source), "78.53981633974483\n3 2.5 4.0 2 3 3\ntrue\n");
+    assert_eq!(
+        run(source),
+        "78.53981633974483\nno real square root\nOk(4.0) Err(Complex) Err(Indeterminate) Ok(-8.0)\n3 2.5 2 3 3\ntrue\n"
+    );
+    // Representation limits and division by zero panic.
+    assert_error("import math\nprint(math.pow(10, 400))", "panic");
+    assert_error("import math\nprint(math.pow(0, -1))", "division by zero");
+    assert_error("import math\nprint(math.round(1e300))", "integer overflow");
+}
+
+#[test]
+fn floats_have_no_nan_or_infinity() {
+    assert_error("x = 1e308 * 10.0", "float overflow");
+    assert_error("x = 1.5 / 0.0", "division by zero");
+    assert_error("x = (-8.0) ** 0.5", "not a real number");
+    assert_error("x = 0.0 ** 0.0", "indeterminate");
+    assert_error("x = 0 ** 0", "indeterminate");
+    assert_error("x = 0.0 ** -1.0", "division by zero");
+    assert_error("x = 1e400", "float literal is too large");
+    assert_eq!(run("print(2.0 ** 0.5 > 1.41, 2 ** 3, (-8.0) ** 2.0)"), "true 8 64.0\n");
+    assert_eq!(run("print(6.022e23, 1e15, 2.5e-3)"), "6.022e23 1000000000000000.0 0.0025\n");
+}
+
+#[test]
+fn panic_builtin() {
+    assert_error("panic('impossible state')", "panic: test.ez:1: impossible state");
+    let source = r#"
+        function check(x: int): int {
+            if (x > 0) { return x }
+            panic('x must be positive')
+        }
+        print(check(2))
+    "#;
+    assert_eq!(run(source), "2\n");
 }
 
 #[test]
@@ -933,21 +1031,43 @@ fn stdlib_json() {
     let source = r#"
         import json
 
-        text: string = '{"name": "ezlang", "year": 2025}'
-        data = json.parse(text)
+        match (json.parse('{"name": "ezlang", "year": 2025, "tags": ["a"], "ok": true, "x": null, "pi": 3.14}')) {
+            Ok(Object(fields)) => {
+                match (fields['name']) {
+                    String(name) => print(name) // ezlang
+                    _ => print('name is not a string')
+                }
+                match (fields['x']) {
+                    Null => print('null')
+                    _ => print('not null')
+                }
+                print(fields['year'], fields['tags'], fields['pi'])
+            }
+            Ok(_) => print('expected an object')
+            Err(error) => print(`invalid JSON: ${error}`)
+        }
 
-        print(data.name) // ezlang
-        print(data.year + 1)
+        match (json.parse('{"year": 2025}')) {
+            Ok(data) => {
+                print(json.get(data, 'year'), json.get(data, 'nope'))
+                match (json.get(data, 'year')) {
+                    Some(year) => print(json.asInt(year), json.asFloat(year), json.asString(year))
+                    None => print('no year')
+                }
+                print(json.stringify(data))
+            }
+            Err(error) => print(error)
+        }
 
-        jsonText = json.stringify(data)
-
-        print(jsonText)
-        print(json.stringify([1.5, 2.0]), json.stringify({ ok: true, tags: ['a'] }), json.stringify(None))
+        print(json.stringify(json.Array([json.Float(2.0), json.Int(2), json.String('a'), json.Null, json.Bool(false), json.Float(6.022e23)])))
+        print(json.parse('{"a": }'))
+        print(json.parse('[1,\n 99999999999999999999]'))
     "#;
     assert_eq!(
         run(source),
-        "ezlang\n2026\n{\"name\":\"ezlang\",\"year\":2025}\n[1.5,2] {\"ok\":true,\"tags\":[\"a\"]} null\n"
+        "ezlang\nnull\nInt(2025) Array([String('a')]) Float(3.14)\nSome(Int(2025)) None\nSome(2025) Some(2025.0) None\n{\"year\":2025}\n[2.0,2,\"a\",null,false,6.022e23]\nErr(Syntax('unexpected character \\'}\\'', 1, 7))\nErr(NumberOutOfRange('99999999999999999999', 2, 2))\n"
     );
+    assert_error("import json\nprint(json.stringify(1))", "must be Json");
 }
 
 #[test]
@@ -1040,17 +1160,24 @@ fn stdlib_http() {
         r#"
         import http
 
-        res = http.get('http://127.0.0.1:{port}/api')
-
-        if (res.status == 200) {{
-            print(res.body)
+        match (http.get('http://127.0.0.1:{port}/api')) {{
+            Ok(res) => if (res.status == 200) {{ print(res.body) }}
+            Err(error) => print(error)
         }}
-        print(http.post('http://127.0.0.1:{port}/items', 'data').body)
+        match (http.post('http://127.0.0.1:{port}/items', 'data')) {{
+            Ok(res) => print(res.body)
+            Err(error) => print(error)
+        }}
+        match (http.get('http://127.0.0.1:1/closed')) {{
+            Ok(_) => print('connected?')
+            Err(ConnectionFailed(_, _)) => print('connection failed')
+            Err(error) => print(error)
+        }}
         "#
     );
     assert_eq!(
         run(&source),
-        "GET /api HTTP/1.1 \nPOST /items HTTP/1.1 data\n"
+        "GET /api HTTP/1.1 \nPOST /items HTTP/1.1 data\nconnection failed\n"
     );
     server.join().unwrap();
 }

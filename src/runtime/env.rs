@@ -8,6 +8,9 @@ use crate::runtime::value::Value;
 #[derive(Debug, Default)]
 pub struct Env {
     vars: RefCell<HashMap<String, Value>>,
+    /// Names imported from another module: always read from that module, so the
+    /// importer sees the current value of an exported `var`.
+    aliases: RefCell<HashMap<String, Rc<Env>>>,
     parent: Option<Rc<Env>>,
 }
 
@@ -15,6 +18,7 @@ impl Env {
     pub fn new(parent: Option<Rc<Env>>) -> Rc<Env> {
         Rc::new(Env {
             vars: RefCell::new(HashMap::new()),
+            aliases: RefCell::new(HashMap::new()),
             parent,
         })
     }
@@ -24,10 +28,20 @@ impl Env {
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        match self.vars.borrow().get(name) {
-            Some(value) => Some(value.clone()),
-            None => self.parent.as_ref().and_then(|parent| parent.get(name)),
+        if let Some(value) = self.vars.borrow().get(name) {
+            return Some(value.clone());
         }
+        if let Some(module) = self.aliases.borrow().get(name) {
+            return module.get_local(name);
+        }
+        self.parent.as_ref().and_then(|parent| parent.get(name))
+    }
+
+    /// Makes `name` refer to the variable of the same name in `module`.
+    pub fn alias(&self, name: &str, module: &Rc<Env>) {
+        self.aliases
+            .borrow_mut()
+            .insert(name.to_string(), Rc::clone(module));
     }
 
     /// Value defined in this scope only (used for module members).

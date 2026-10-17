@@ -8,8 +8,14 @@
 | `float(x)`  | convert the value of a variable to float   | `float(2) → 2.0`   |
 | `string(x)` | convert the value of a variable to string  | `string(0) → '0'`  |
 
-Converting a `string` can fail, so `int(x)` and `float(x)` return a `Result` when `x` is a string:
-`Ok(value)` on success or `Err(message)` otherwise.
+Converting a `string` can fail, so `int(x)` and `float(x)` return a `Result[int, ParseError]` (or `Result[float, ParseError]`) when `x` is a string:
+
+```ez
+type ParseError = {
+	InvalidNumber(text: string)   // not a number: 'abc', 'nan', 'inf'
+	OutOfRange(text: string)      // too large: '99999999999999999999', '1e400'
+}
+```
 
 Examples:
 
@@ -17,12 +23,13 @@ Examples:
 
 ```ez
 int(3.9) // 3
-int('0') // Result[int, string] → Ok(0)
-int('abc') // Result[int, string] → Err('not a valid int')
+int('0') // Result[int, ParseError] → Ok(0)
+int('abc') // Result[int, ParseError] → Err(InvalidNumber('abc'))
 
 match (int('42')) {
 	Ok(value) => print(value + 1) // 43
-	Err(error) => print(error)
+	Err(InvalidNumber(text)) => print(`not a number: ${text}`)
+	Err(OutOfRange(text)) => print(`too large: ${text}`)
 }
 ```
 

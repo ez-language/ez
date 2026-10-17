@@ -229,6 +229,9 @@ impl Parser {
             Token::Type => self.parse_type_declaration(),
             Token::Interface => self.parse_interface(),
             Token::Import => self.parse_import(),
+            Token::Export => {
+                self.error_here("'export' is only allowed at the top level of a file".to_string())
+            }
             Token::Func => self.parse_function_declaration(),
             Token::Var => {
                 self.advance();
@@ -509,6 +512,30 @@ impl Parser {
         })
     }
 
+    /// `export function`, `export const`, `export var`, `export type` or `export interface`.
+    fn parse_export(&mut self) -> Result<AstNode, EzError> {
+        let line = self.current_line();
+        self.advance(); // export
+        if !matches!(
+            self.current(),
+            Token::Func | Token::Const | Token::Var | Token::Type | Token::Interface
+        ) {
+            return self.error_here(format!(
+                "expected 'function', 'const', 'var', 'type' or 'interface' after 'export', found {:?}",
+                self.current()
+            ));
+        }
+        let declaration = AstNode::Export(Box::new(self.parse_statement()?));
+        if line == 0 {
+            Ok(declaration)
+        } else {
+            Ok(AstNode::Located {
+                line,
+                node: Box::new(declaration),
+            })
+        }
+    }
+
     fn parse_import(&mut self) -> Result<AstNode, EzError> {
         self.advance(); // import
         if *self.current() == Token::LBrace {
@@ -756,6 +783,14 @@ impl Parser {
         let line = self.current_line();
         match self.advance() {
             Token::Int(n) => Ok(AstNode::IntLiteral(n)),
+            Token::Float(n) if !n.is_finite() => {
+                let message = "float literal is too large (float has no infinity)".to_string();
+                if line == 0 {
+                    error(message)
+                } else {
+                    error(format!("line {}: {}", line, message))
+                }
+            }
             Token::Float(n) => Ok(AstNode::FloatLiteral(n)),
             Token::StringLiteral(s) => Ok(AstNode::StringLiteral(s)),
             Token::TemplateString(raw) => parse_template(&raw, line),
@@ -1110,7 +1145,11 @@ fn parse_statements(mut parser: Parser) -> Result<Vec<AstNode>, EzError> {
         if *parser.current() == Token::EOF {
             break;
         }
-        statements.push(parser.parse_located_statement()?);
+        if *parser.current() == Token::Export {
+            statements.push(parser.parse_export()?);
+        } else {
+            statements.push(parser.parse_located_statement()?);
+        }
     }
     Ok(statements)
 }

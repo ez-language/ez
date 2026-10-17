@@ -31,8 +31,15 @@ The `datetime` module provides utilities to work with current date and time, and
     -   `min`: minutes (00–59)
     -   `ss`: seconds (00–59)
 
--   `parse(dateString: string, pattern: string) -> int`  
+-   `parse(dateString: string, pattern: string) -> Result[int, DateError]`  
     Parses a date string into a timestamp (seconds since the epoch) according to the given pattern.
+
+    ```ez
+    type DateError = {
+        PatternMismatch(text: string, pattern: string)   // the text does not follow the pattern
+        InvalidDate(text: string)                        // e.g. 2025-02-30
+    }
+    ```
 
 Dates and times are in UTC.
 
@@ -45,9 +52,10 @@ date = datetime.today()
 
 print(date)
 
-timestamp = datetime.parse('2025-04-20', 'YYYY-MM-DD')
-
-print(datetime.format(timestamp, 'DD/MM/YYYY')) // 20/04/2025
+match (datetime.parse('2025-04-20', 'YYYY-MM-DD')) {
+    Ok(timestamp) => print(datetime.format(timestamp, 'DD/MM/YYYY')) // 20/04/2025
+    Err(error) => print(error)
+}
 
 now = datetime.now()
 

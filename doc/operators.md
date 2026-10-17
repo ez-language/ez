@@ -23,7 +23,13 @@ Division follows the type of the operands, as in Go and Rust: dividing two `int`
 
 `//` is always a comment (see [Comments](comments.md)).
 
-Operators cannot return a `Result`, so an invalid arithmetic operation panics: division by zero, and results that do not fit in an `int` or a `float` (overflow).
+Operators cannot return a `Result`, so an invalid arithmetic operation panics:
+
+-   division by zero (`1 / 0`, `1.5 % 0.0`, `0.0 ** -1.0`);
+-   results that do not fit in an `int` or a `float` (overflow);
+-   `**` with a result that is not a real number (`(-8.0) ** 0.5`) or indeterminate (`0 ** 0`).
+
+To handle these cases instead of panicking, use `math.pow`, which returns a `MathError` (see [math](standard-library/math.md)).
 
 ## Comparison Operators
 

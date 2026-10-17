@@ -15,7 +15,7 @@ impl fmt::Display for EzError {
             EzError::LexerError(message) => write!(f, "syntax error: {}", message),
             EzError::ParserError(message) => write!(f, "syntax error: {}", message),
             EzError::TypeError(message) => write!(f, "type error: {}", message),
-            EzError::RuntimeError(message) => write!(f, "runtime error: {}", message),
+            EzError::RuntimeError(message) => write!(f, "panic: {}", message),
             EzError::ImportError(message) => write!(f, "import error: {}", message),
         }
     }

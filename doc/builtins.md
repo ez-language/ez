@@ -18,3 +18,15 @@ name: string = 'John'
 
 print(`Hello, ${name}!`)
 ```
+
+-   `panic(message)`: stops the program with an error message. Use it for states that should be impossible (bugs), not for expected failures, which are `Result` values.
+
+```ez
+function check(age: int): int {
+	if (age >= 0) { return age }
+
+	panic('age cannot be negative')
+}
+```
+
+A panic cannot be caught: ez has no `try` / `catch`. Index out of range, division by zero and overflow also panic.

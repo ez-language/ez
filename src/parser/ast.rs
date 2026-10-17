@@ -267,6 +267,8 @@ pub enum AstNode {
         kind: ImportKind,
         path: String,
     },
+    /// `export` before a top-level declaration.
+    Export(Box<AstNode>),
     /// Statement annotated with the source line where it starts (used in error messages).
     Located {
         line: usize,
@@ -275,11 +277,31 @@ pub enum AstNode {
 }
 
 impl AstNode {
-    /// Removes the `Located` wrappers, returning the node itself.
+    /// Removes the `Located` and `Export` wrappers, returning the declaration itself.
     pub fn unlocated(&self) -> &AstNode {
         match self {
-            AstNode::Located { node, .. } => node.unlocated(),
+            AstNode::Located { node, .. } | AstNode::Export(node) => node.unlocated(),
             other => other,
+        }
+    }
+
+    /// Whether this top-level statement is marked with `export`.
+    pub fn is_exported(&self) -> bool {
+        match self {
+            AstNode::Located { node, .. } => node.is_exported(),
+            AstNode::Export(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Name declared by a function, variable, type or interface declaration.
+    pub fn declared_name(&self) -> Option<&str> {
+        match self.unlocated() {
+            AstNode::FunctionDecl { name, .. }
+            | AstNode::VarDecl { name, .. }
+            | AstNode::TypeDecl { name, .. }
+            | AstNode::InterfaceDecl { name, .. } => Some(name),
+            _ => None,
         }
     }
 }

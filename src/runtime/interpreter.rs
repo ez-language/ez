@@ -11,8 +11,9 @@ use crate::parser::ast::{
     TypeExpr, UnaryOperator,
 };
 use crate::runtime::env::Env;
-use crate::runtime::stdlib;
-use crate::runtime::value::{Closure, Constructor, ModuleValue, Value, VariantValue};
+use crate::runtime::stdlib::{self, PowFailure};
+use crate::runtime::value::{format_float, Closure, ModuleValue, SumType, Value};
+use crate::semantic::builtin_sums::BUILTIN_SUMS;
 use crate::semantic::type_checker::{is_stdlib_import, resolve_module_path, Program};
 
 /// Non-local control flow while executing statements.
@@ -58,31 +59,17 @@ fn coerce(value: Value, to_float: bool) -> Value {
     }
 }
 
-fn option_constructor() -> Rc<Constructor> {
-    Rc::new(Constructor {
-        type_name: "Option".to_string(),
-        variant: "Some".to_string(),
-        field_names: Rc::new(vec!["value".to_string()]),
-    })
-}
-
 impl Interpreter {
     pub fn new(program: Program, out: Box<dyn Write>, input: Box<dyn BufRead>) -> Self {
         let prelude = Env::new(None);
-        for name in ["print", "input", "range", "int", "float", "string"] {
+        for name in ["print", "input", "range", "int", "float", "string", "panic"] {
             prelude.define(name, Value::Builtin(Rc::from(name)));
         }
-        prelude.define("Some", Value::Constructor(option_constructor()));
-        prelude.define("None", stdlib::none());
-        for (variant, field) in [("Ok", "value"), ("Err", "error")] {
-            prelude.define(
-                variant,
-                Value::Constructor(Rc::new(Constructor {
-                    type_name: "Result".to_string(),
-                    variant: variant.to_string(),
-                    field_names: Rc::new(vec![field.to_string()]),
-                })),
-            );
+        for sum in BUILTIN_SUMS.iter().filter(|sum| sum.module.is_none()) {
+            let sum = stdlib::sum(sum.name);
+            for (variant, _) in &sum.variants {
+                prelude.define(variant, sum.constructor(variant));
+            }
         }
         Interpreter {
             program,
@@ -207,31 +194,21 @@ impl Interpreter {
                     name,
                     definition: TypeDef::Sum(variants),
                 } => {
+                    let sum = Rc::new(SumType {
+                        name: name.clone(),
+                        variants: variants
+                            .iter()
+                            .map(|v| {
+                                (v.name.clone(), v.fields.iter().map(|f| f.name.clone()).collect())
+                            })
+                            .collect(),
+                    });
                     for variant in variants {
-                        let field_names: Vec<String> =
-                            variant.fields.iter().map(|f| f.name.clone()).collect();
-                        let value = if field_names.is_empty() {
-                            Value::Variant(Rc::new(VariantValue {
-                                type_name: name.clone(),
-                                name: variant.name.clone(),
-                                field_names: Rc::new(vec![]),
-                                values: vec![],
-                            }))
-                        } else {
-                            Value::Constructor(Rc::new(Constructor {
-                                type_name: name.clone(),
-                                variant: variant.name.clone(),
-                                field_names: Rc::new(field_names),
-                            }))
-                        };
-                        env.define(&variant.name, value);
+                        env.define(&variant.name, sum.constructor(&variant.name));
                     }
                     if let Some(module) = &self.current_module {
                         if Rc::ptr_eq(&module.env, env) {
-                            module.types.borrow_mut().push((
-                                name.clone(),
-                                variants.iter().map(|v| v.name.clone()).collect(),
-                            ));
+                            module.types.borrow_mut().push(sum);
                         }
                     }
                 }
@@ -289,23 +266,17 @@ impl Interpreter {
             ImportKind::Module(name) => env.define(name, Value::Module(module)),
             ImportKind::Names(names) => {
                 for name in names {
-                    let mut found = false;
-                    if let Some(value) = module.env.get_local(name) {
-                        env.define(name, value);
-                        found = true;
+                    // Imported names always read the module's variable (see `Env::alias`).
+                    if module.env.get_local(name).is_some() {
+                        env.alias(name, &module.env);
                     }
+                    // Importing a sum type also imports its variants. Interfaces, shapes and
+                    // aliases have no runtime value.
                     let types = module.types.borrow();
-                    if let Some((_, variants)) = types.iter().find(|(n, _)| n == name) {
-                        for variant in variants {
-                            if let Some(value) = module.env.get_local(variant) {
-                                env.define(variant, value);
-                            }
+                    if let Some(sum) = types.iter().find(|sum| sum.name == *name) {
+                        for (variant, _) in &sum.variants {
+                            env.alias(variant, &module.env);
                         }
-                        found = true;
-                    }
-                    if !found && !is_stdlib_import(path) {
-                        // Interfaces, shapes and aliases have no runtime value.
-                        continue;
                     }
                 }
             }
@@ -321,10 +292,15 @@ impl Interpreter {
         for (member, value) in stdlib::module_members(name) {
             env.define(&member, value);
         }
+        let types = BUILTIN_SUMS
+            .iter()
+            .filter(|sum| sum.module == Some(name))
+            .map(|sum| stdlib::sum(sum.name))
+            .collect();
         let module = Rc::new(ModuleValue {
             name: name.to_string(),
             env,
-            types: RefCell::new(Vec::new()),
+            types: RefCell::new(types),
         });
         self.stdlib.insert(name.to_string(), Rc::clone(&module));
         module
@@ -340,6 +316,7 @@ impl Interpreter {
                 self.line = *line;
                 self.eval(node, env)
             }
+            AstNode::Export(node) => self.eval(node, env),
             AstNode::IntLiteral(n) => Ok(Value::Int(*n)),
             AstNode::FloatLiteral(n) => Ok(Value::Float(*n)),
             AstNode::StringLiteral(s) => Ok(Value::str(s)),
@@ -742,6 +719,12 @@ impl Interpreter {
                 result.map(Value::Int).ok_or_else(overflow)
             }
             (Power, Value::Int(a), Value::Int(b)) => {
+                if *a == 0 && *b == 0 {
+                    return Err(self.error("0 ** 0 is indeterminate"));
+                }
+                if *a == 0 && *b < 0 {
+                    return Err(self.error("division by zero"));
+                }
                 if *b < 0 {
                     return Err(self.error("negative exponent with int operands; use a float base"));
                 }
@@ -758,7 +741,24 @@ impl Interpreter {
                     Add => a + b,
                     Subtract => a - b,
                     Multiply => a * b,
-                    Power => a.powf(b),
+                    // Operators cannot return a Result: every failure panics.
+                    Power => match stdlib::real_pow(a, b) {
+                        Ok(result) => result,
+                        Err(PowFailure::Complex) => {
+                            return Err(self.error(format!(
+                                "{} ** {} is not a real number (use math.pow to handle it)",
+                                format_float(a),
+                                format_float(b)
+                            )))
+                        }
+                        Err(PowFailure::Indeterminate) => {
+                            return Err(self.error("0 ** 0 is indeterminate"))
+                        }
+                        Err(PowFailure::DivisionByZero) => {
+                            return Err(self.error("division by zero"))
+                        }
+                        Err(PowFailure::Overflow) => return Err(self.error("float overflow")),
+                    },
                     _ => {
                         if b == 0.0 {
                             return Err(self.error("division by zero"));
@@ -770,9 +770,12 @@ impl Interpreter {
                         }
                     }
                 };
+                // `float` has no infinity: a result that does not fit is a representation limit.
+                if !result.is_finite() {
+                    return Err(self.error("float overflow"));
+                }
                 Ok(Value::Float(result))
             }
-
             (Add, Value::Str(a), Value::Str(b)) => Ok(Value::str(&format!("{}{}", a, b))),
             (Multiply, Value::Str(s), Value::Int(n)) | (Multiply, Value::Int(n), Value::Str(s)) => {
                 Ok(Value::str(&s.repeat((*n).max(0) as usize)))
@@ -869,20 +872,15 @@ impl Interpreter {
             Value::Function(closure) => self.call_closure(closure, args),
             Value::Builtin(name) => stdlib::call(self, name, args),
             Value::Constructor(constructor) => {
-                if args.len() != constructor.field_names.len() {
+                if args.len() != constructor.arity() {
                     return Err(self.error(format!(
                         "'{}' expects {} argument(s), found {}",
                         constructor.variant,
-                        constructor.field_names.len(),
+                        constructor.arity(),
                         args.len()
                     )));
                 }
-                Ok(Value::Variant(Rc::new(VariantValue {
-                    type_name: constructor.type_name.clone(),
-                    name: constructor.variant.clone(),
-                    field_names: Rc::clone(&constructor.field_names),
-                    values: args,
-                })))
+                Ok(constructor.sum.make(&constructor.variant, args))
             }
             other => Err(self.error(format!("a value of type {} cannot be called", other.type_name()))),
         }
@@ -979,7 +977,13 @@ impl Interpreter {
         match pattern {
             Pattern::Wildcard => Ok(true),
             Pattern::Identifier(name) => {
-                if Self::is_variant_name(env, name) {
+                // A name is a variant when the matched value's type has it (`Null` against a
+                // `Json`), even if the variant is not in scope.
+                let is_variant = match value {
+                    Value::Variant(variant) => variant.sum.has_variant(name),
+                    _ => false,
+                } || Self::is_variant_name(env, name);
+                if is_variant {
                     return Ok(matches!(value, Value::Variant(v) if v.name == *name));
                 }
                 env.define(name, value.clone());
@@ -1013,10 +1017,5 @@ pub(crate) fn as_float(value: &Value) -> f64 {
 }
 
 pub(crate) fn some(value: Value) -> Value {
-    Value::Variant(Rc::new(VariantValue {
-        type_name: "Option".to_string(),
-        name: "Some".to_string(),
-        field_names: option_constructor().field_names.clone(),
-        values: vec![value],
-    }))
+    stdlib::sum("Option").make("Some", vec![value])
 }

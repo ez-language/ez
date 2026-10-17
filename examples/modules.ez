@@ -2,4 +2,8 @@ import math
 import { add } from 'lib/calc.ez'
 
 print(add(2, 3))
-print(math.sqrt(16))
+
+match (math.sqrt(16)) {
+    Ok(root) => print(root)
+    Err(error) => print(error)
+}

@@ -44,17 +44,59 @@ impl Object {
     }
 }
 
+/// A sum type known at runtime: its name and its variants, with their field names.
+#[derive(Debug)]
+pub struct SumType {
+    pub name: String,
+    pub variants: Vec<(String, Vec<String>)>,
+}
+
+impl SumType {
+    pub fn has_variant(&self, variant: &str) -> bool {
+        self.variants.iter().any(|(name, _)| name == variant)
+    }
+
+    pub fn fields(&self, variant: &str) -> &[String] {
+        self.variants
+            .iter()
+            .find(|(name, _)| name == variant)
+            .map(|(_, fields)| fields.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// The value bound to a variant name: the value itself for a variant without fields,
+    /// a constructor otherwise.
+    pub fn constructor(self: &Rc<Self>, variant: &str) -> Value {
+        if self.fields(variant).is_empty() {
+            self.make(variant, vec![])
+        } else {
+            Value::Constructor(Rc::new(Constructor {
+                sum: Rc::clone(self),
+                variant: variant.to_string(),
+            }))
+        }
+    }
+
+    pub fn make(self: &Rc<Self>, variant: &str, values: Vec<Value>) -> Value {
+        Value::Variant(Rc::new(VariantValue {
+            sum: Rc::clone(self),
+            name: variant.to_string(),
+            values,
+        }))
+    }
+}
+
 #[derive(Debug)]
 pub struct VariantValue {
-    pub type_name: String,
+    pub sum: Rc<SumType>,
     pub name: String,
-    pub field_names: Rc<Vec<String>>,
     pub values: Vec<Value>,
 }
 
 impl VariantValue {
     pub fn field(&self, name: &str) -> Option<&Value> {
-        self.field_names
+        self.sum
+            .fields(&self.name)
             .iter()
             .position(|n| n == name)
             .map(|i| &self.values[i])
@@ -76,17 +118,22 @@ pub struct Closure {
 
 #[derive(Debug)]
 pub struct Constructor {
-    pub type_name: String,
+    pub sum: Rc<SumType>,
     pub variant: String,
-    pub field_names: Rc<Vec<String>>,
+}
+
+impl Constructor {
+    pub fn arity(&self) -> usize {
+        self.sum.fields(&self.variant).len()
+    }
 }
 
 #[derive(Debug)]
 pub struct ModuleValue {
     pub name: String,
     pub env: Rc<Env>,
-    /// Sum types declared at the top level of the module, with their variant names.
-    pub types: RefCell<Vec<(String, Vec<String>)>>,
+    /// Sum types declared at the top level of the module.
+    pub types: RefCell<Vec<Rc<SumType>>>,
 }
 
 #[derive(Debug)]
@@ -141,7 +188,10 @@ pub fn format_float(value: f64) -> String {
         "NaN".to_string()
     } else if value.is_infinite() {
         if value > 0.0 { "inf" } else { "-inf" }.to_string()
-    } else if value.fract() == 0.0 && value.abs() < 1e16 {
+    } else if value.abs() >= 1e16 {
+        // Large values in scientific notation, so they never look like an int.
+        format!("{:e}", value)
+    } else if value.fract() == 0.0 {
         format!("{:.1}", value)
     } else {
         format!("{}", value)

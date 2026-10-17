@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -8,6 +8,7 @@ use crate::parser::ast::{
     TemplatePart, TypeDef, TypeExpr, UnaryOperator,
 };
 use crate::parser::parse_source;
+use crate::semantic::builtin_sums::{stdlib_functions, BUILTIN_SUMS};
 use crate::semantic::types::{ModuleId, Type, TypeId, TypeKind, TypeTable, VariantDef};
 
 type CheckResult<T> = Result<T, EzError>;
@@ -46,6 +47,8 @@ struct Symbol {
     ty: Type,
     is_const: bool,
     kind: SymbolKind,
+    /// Module that declared the symbol, when it was imported: it is read-only here.
+    owner: Option<String>,
 }
 
 impl Symbol {
@@ -54,6 +57,7 @@ impl Symbol {
             ty,
             is_const,
             kind: SymbolKind::Value,
+            owner: None,
         }
     }
 
@@ -62,6 +66,7 @@ impl Symbol {
             ty: Type::Void,
             is_const: true,
             kind: SymbolKind::Builtin(name.to_string()),
+            owner: None,
         }
     }
 }
@@ -81,8 +86,14 @@ struct Scope {
 
 #[derive(Debug, Default, Clone)]
 struct ModuleType {
+    /// How the module is named in messages (`math.ez`, `json`).
+    display: String,
+    /// Exported values, functions and constructors.
     members: HashMap<String, Symbol>,
+    /// Exported types.
     types: HashMap<String, TypeRef>,
+    /// Names declared in the module but not exported.
+    private: HashSet<String>,
 }
 
 struct ReturnContext {
@@ -96,6 +107,14 @@ struct ReturnContext {
 pub struct BuiltinTypes {
     pub option: TypeId,
     pub result: TypeId,
+    pub parse_error: TypeId,
+    pub math_error: TypeId,
+    pub file_error: TypeId,
+    pub http_error: TypeId,
+    pub json: TypeId,
+    pub json_object: TypeId,
+    pub json_error: TypeId,
+    pub date_error: TypeId,
     pub file: TypeId,
     pub datetime: TypeId,
     pub response: TypeId,
@@ -146,42 +165,66 @@ impl Default for Checker {
 impl Checker {
     pub fn new() -> Self {
         let mut table = TypeTable::default();
-        let option = table.add(
-            "Option",
-            1,
-            TypeKind::Sum(vec![
-                VariantDef {
-                    name: "Some".to_string(),
-                    fields: vec![("value".to_string(), Type::Param(0))],
-                },
-                VariantDef {
-                    name: "None".to_string(),
-                    fields: vec![],
-                },
-            ]),
+
+        // Built-in sum types: declared first, resolved once every name exists (`Json` refers to
+        // `JsonObject`, which refers back to `Json`).
+        let mut ids: HashMap<&'static str, TypeId> = HashMap::new();
+        for sum in BUILTIN_SUMS {
+            ids.insert(sum.name, table.add(sum.name, sum.params, TypeKind::Pending));
+        }
+        let json = ids["Json"];
+        let json_object = table.add(
+            "JsonObject",
+            0,
+            TypeKind::Dict {
+                key: Type::String,
+                value: Self::named(json),
+            },
         );
-        let result = table.add(
-            "Result",
-            2,
-            TypeKind::Sum(vec![
-                VariantDef {
-                    name: "Ok".to_string(),
-                    fields: vec![("value".to_string(), Type::Param(0))],
-                },
-                VariantDef {
-                    name: "Err".to_string(),
-                    fields: vec![("error".to_string(), Type::Param(1))],
-                },
-            ]),
-        );
+        let field_type = |name: &str| -> Type {
+            match name {
+                "T0" => Type::Param(0),
+                "T1" => Type::Param(1),
+                "string" => Type::String,
+                "int" => Type::Int,
+                "float" => Type::Float,
+                "boolean" => Type::Boolean,
+                "Json[]" => Type::List(Box::new(Self::named(json))),
+                "JsonObject" => Self::named(json_object),
+                other => panic!("unknown field type '{}' in a built-in sum type", other),
+            }
+        };
+        for sum in BUILTIN_SUMS {
+            let variants = sum
+                .variants
+                .iter()
+                .map(|(name, fields)| VariantDef {
+                    name: name.to_string(),
+                    fields: fields
+                        .iter()
+                        .map(|(field, ty)| (field.to_string(), field_type(ty)))
+                        .collect(),
+                })
+                .collect();
+            table.types[ids[sum.name]].kind = TypeKind::Sum(variants);
+        }
+
+        let result_of = |ok: Type, error: &str| Type::Named {
+            id: ids["Result"],
+            args: vec![ok, Self::named(ids[error])],
+        };
         let file = table.add(
             "File",
             0,
             TypeKind::Builtin {
                 fields: vec![],
                 methods: vec![
-                    ("read".to_string(), vec![], Type::String),
-                    ("write".to_string(), vec![Type::String], Type::Void),
+                    ("read".to_string(), vec![], result_of(Type::String, "FileError")),
+                    (
+                        "write".to_string(),
+                        vec![Type::String],
+                        result_of(Type::Void, "FileError"),
+                    ),
                     ("close".to_string(), vec![], Type::Void),
                 ],
             },
@@ -224,8 +267,16 @@ impl Checker {
         Checker {
             table,
             builtins: BuiltinTypes {
-                option,
-                result,
+                option: ids["Option"],
+                result: ids["Result"],
+                parse_error: ids["ParseError"],
+                math_error: ids["MathError"],
+                file_error: ids["FileError"],
+                http_error: ids["HttpError"],
+                json,
+                json_object,
+                json_error: ids["JsonError"],
+                date_error: ids["DateError"],
                 file,
                 datetime,
                 response,
@@ -240,10 +291,27 @@ impl Checker {
         }
     }
 
+    /// Id of a built-in sum type, by name.
+    fn builtin_sum_id(&self, name: &str) -> TypeId {
+        let b = &self.builtins;
+        match name {
+            "Option" => b.option,
+            "Result" => b.result,
+            "ParseError" => b.parse_error,
+            "MathError" => b.math_error,
+            "FileError" => b.file_error,
+            "HttpError" => b.http_error,
+            "Json" => b.json,
+            "JsonError" => b.json_error,
+            "DateError" => b.date_error,
+            other => panic!("unknown built-in sum type '{}'", other),
+        }
+    }
+
     /// Scope with the built-in functions, types and constructors.
     fn prelude(&self) -> Scope {
         let mut scope = Scope::default();
-        for name in ["print", "input", "range", "int", "float", "string"] {
+        for name in ["print", "input", "range", "int", "float", "string", "panic"] {
             scope.vars.insert(name.to_string(), Symbol::builtin(name));
         }
         let primitives = [
@@ -253,18 +321,18 @@ impl Checker {
             ("boolean", Type::Boolean),
             ("bool", Type::Boolean),
             ("void", Type::Void),
-            ("any", Type::Any),
         ];
         for (name, ty) in primitives {
             scope.types.insert(name.to_string(), TypeRef::Type(ty));
         }
-        scope
-            .types
-            .insert("Option".to_string(), TypeRef::Generic(self.builtins.option));
-        scope
-            .types
-            .insert("Result".to_string(), TypeRef::Generic(self.builtins.result));
-        for id in [self.builtins.option, self.builtins.result] {
+        for sum in BUILTIN_SUMS.iter().filter(|sum| sum.module.is_none()) {
+            let id = self.builtin_sum_id(sum.name);
+            let type_ref = if sum.params > 0 {
+                TypeRef::Generic(id)
+            } else {
+                TypeRef::Type(Self::named(id))
+            };
+            scope.types.insert(sum.name.to_string(), type_ref);
             self.declare_constructors_into(&mut scope, id);
         }
         scope
@@ -296,6 +364,7 @@ impl Checker {
                             id,
                             variant: variant.name.clone(),
                         },
+                        owner: None,
                     },
                 );
             }
@@ -351,19 +420,136 @@ impl Checker {
             },
         );
 
-        let result = self.check_statements(&program, None);
-        let module_scope = self.state.scopes.get(1).cloned().unwrap_or_default();
+        let result = self.check_statements(&program, None).and_then(|_| {
+            let module_scope = self.state.scopes.get(1).cloned().unwrap_or_default();
+            self.module_exports(&program, &module_scope, display)
+        });
         self.state = saved;
         self.loading.pop();
-        result?;
+        let module = result?;
 
-        self.modules.push(ModuleType {
-            members: module_scope.vars,
-            types: module_scope.types,
-        });
+        self.modules.push(module);
         let id = self.modules.len() - 1;
         self.module_by_path.insert(path.to_path_buf(), id);
         Ok(id)
+    }
+
+    /// What other modules can import: only the declarations marked with `export`. Exporting a
+    /// sum type also exports its variants; an exported `var` is read-only outside the module.
+    fn module_exports(&mut self, program: &[AstNode], scope: &Scope, display: &str) -> CheckResult<ModuleType> {
+        let mut module = ModuleType {
+            display: display.to_string(),
+            ..ModuleType::default()
+        };
+        let mut exported_ids: HashSet<TypeId> = HashSet::new();
+        let mut private_ids: HashSet<TypeId> = HashSet::new();
+        for statement in program {
+            let name = match statement.declared_name() {
+                Some(name) => name,
+                None => continue,
+            };
+            let is_type = matches!(
+                statement.unlocated(),
+                AstNode::TypeDecl { .. } | AstNode::InterfaceDecl { .. }
+            );
+            if !statement.is_exported() {
+                module.private.insert(name.to_string());
+                if let Some(TypeRef::Type(Type::Named { id, .. })) = scope.types.get(name).filter(|_| is_type) {
+                    private_ids.insert(*id);
+                }
+                continue;
+            }
+            if is_type {
+                if let Some(type_ref) = scope.types.get(name) {
+                    module.types.insert(name.to_string(), type_ref.clone());
+                    if let TypeRef::Type(Type::Named { id, .. }) = type_ref {
+                        exported_ids.insert(*id);
+                        for variant in self.table.variants_of(*id).cloned().unwrap_or_default() {
+                            if let Some(symbol) = scope.vars.get(&variant.name) {
+                                module.members.insert(variant.name.clone(), symbol.clone());
+                            }
+                        }
+                    }
+                }
+            } else if let Some(symbol) = scope.vars.get(name) {
+                let mut symbol = symbol.clone();
+                symbol.owner = Some(display.to_string());
+                module.members.insert(name.to_string(), symbol);
+            }
+        }
+        private_ids.retain(|id| !exported_ids.contains(id));
+        // Implicit declarations (`x = 1`) and imported names are never exported either.
+        for name in scope.vars.keys().chain(scope.types.keys()) {
+            if !module.members.contains_key(name) && !module.types.contains_key(name) {
+                module.private.insert(name.clone());
+            }
+        }
+
+        // A public signature cannot mention a private type: importers could not name it.
+        for statement in program.iter().filter(|s| s.is_exported()) {
+            self.set_line(statement);
+            let name = statement.declared_name().unwrap_or_default();
+            let mut types: Vec<Type> = Vec::new();
+            match scope.types.get(name) {
+                Some(TypeRef::Type(Type::Named { id, args })) if module.types.contains_key(name) => {
+                    match &self.table.get(*id).kind {
+                        TypeKind::Sum(variants) => types.extend(
+                            variants.iter().flat_map(|v| v.fields.iter().map(|(_, t)| t.clone())),
+                        ),
+                        TypeKind::Shape(fields) | TypeKind::Interface(fields) => {
+                            types.extend(fields.iter().map(|(_, t)| t.clone()))
+                        }
+                        TypeKind::Dict { value, .. } => types.push(value.clone()),
+                        _ => {}
+                    }
+                    types.extend(args.iter().cloned());
+                }
+                Some(TypeRef::Type(alias)) if module.types.contains_key(name) => types.push(alias.clone()),
+                _ => {}
+            }
+            if let Some(symbol) = module.members.get(name) {
+                types.push(symbol.ty.clone());
+            }
+            for ty in &types {
+                if let Some(id) = Self::find_type_id(ty, &private_ids) {
+                    return self.err(format!(
+                        "'{}' is exported, but its type uses the private type '{}' (export '{}' too)",
+                        name,
+                        self.table.get(id).name,
+                        self.table.get(id).name
+                    ));
+                }
+            }
+        }
+        Ok(module)
+    }
+
+    fn missing_member<T>(&self, module: ModuleId, name: &str) -> CheckResult<T> {
+        let module = &self.modules[module];
+        if module.private.contains(name) {
+            self.err(format!("'{}' is not exported by '{}'", name, module.display))
+        } else {
+            self.err(format!("module '{}' has no member '{}'", module.display, name))
+        }
+    }
+
+    /// First type of `ids` that appears in `ty`.
+    fn find_type_id(ty: &Type, ids: &HashSet<TypeId>) -> Option<TypeId> {
+        match ty {
+            Type::Named { id, args } | Type::Variant { id, args, .. } => {
+                if ids.contains(id) {
+                    return Some(*id);
+                }
+                args.iter().find_map(|a| Self::find_type_id(a, ids))
+            }
+            Type::List(inner) => Self::find_type_id(inner, ids),
+            Type::Function { params, ret } => params
+                .iter()
+                .chain(std::iter::once(&**ret))
+                .find_map(|t| Self::find_type_id(t, ids)),
+            Type::Record(fields) => fields.iter().find_map(|(_, t)| Self::find_type_id(t, ids)),
+            _ => None,
+        }
     }
 
     // ------------------------------------------------------------------
@@ -434,13 +620,6 @@ impl Checker {
         }
     }
 
-    fn result_of(&self, ok: Type, err: Type) -> Type {
-        Type::Named {
-            id: self.builtins.result,
-            args: vec![ok, err],
-        }
-    }
-
     fn named(id: TypeId) -> Type {
         Type::Named { id, args: vec![] }
     }
@@ -452,7 +631,7 @@ impl Checker {
     /// Whether a value of type `actual` can be used where `expected` is required.
     pub fn assignable(&self, expected: &Type, actual: &Type) -> bool {
         match (expected, actual) {
-            (_, Type::Never | Type::Unknown | Type::Any) | (Type::Any | Type::Unknown, _) => true,
+            (_, Type::Never | Type::Unknown) | (Type::Unknown, _) => true,
             (Type::Float, Type::Int) => true,
             (Type::List(e), Type::List(a)) => self.assignable(e, a),
             (Type::Named { id: e, args: ea }, Type::Named { id: a, args: aa })
@@ -523,7 +702,6 @@ impl Checker {
             _ if a == b => Some(a.clone()),
             (Type::Never, other) | (other, Type::Never) => Some(other.clone()),
             (Type::Unknown, other) | (other, Type::Unknown) => Some(other.clone()),
-            (Type::Any, _) | (_, Type::Any) => Some(Type::Any),
             (Type::Int, Type::Float) | (Type::Float, Type::Int) => Some(Type::Float),
             (Type::List(x), Type::List(y)) => Some(Type::List(Box::new(self.join(x, y)?))),
             (
@@ -849,6 +1027,7 @@ impl Checker {
                 self.state.line = *line;
                 self.check_statement(node, expected)
             }
+            AstNode::Export(node) => self.check_statement(node, expected),
             AstNode::VarDecl {
                 name,
                 ty,
@@ -913,7 +1092,7 @@ impl Checker {
                 let item = match &iterable_ty {
                     Type::List(inner) => (**inner).clone(),
                     Type::String => Type::String,
-                    Type::Any | Type::Unknown => Type::Any,
+                    Type::Unknown => Type::Unknown,
                     Type::Named { id, .. } => match &self.table.get(*id).kind {
                         TypeKind::Dict { key, .. } => key.clone(),
                         _ => return self.not_iterable(&iterable_ty),
@@ -945,7 +1124,7 @@ impl Checker {
 
     fn check_condition(&mut self, condition: &AstNode, keyword: &str) -> CheckResult<()> {
         let ty = self.check_value(condition, Some(&Type::Boolean))?;
-        if !matches!(ty, Type::Boolean | Type::Any | Type::Never) {
+        if !matches!(ty, Type::Boolean | Type::Unknown | Type::Never) {
             return self.err(format!(
                 "the condition of '{}' must be boolean, found {}",
                 keyword,
@@ -1023,6 +1202,9 @@ impl Checker {
                         return self.declare(name, Symbol::value(ty, false));
                     }
                 };
+                if let Some(owner) = &symbol.owner {
+                    return self.err(format!("'{}' is read-only outside '{}'", name, owner));
+                }
                 if !matches!(symbol.kind, SymbolKind::Value) || matches!(symbol.ty, Type::Module(_)) {
                     return self.err(format!("cannot assign to '{}'", name));
                 }
@@ -1046,7 +1228,7 @@ impl Checker {
                         self.expect_type(&Type::Int, &index_ty, "list index")?;
                         (**element).clone()
                     }
-                    Type::Any | Type::Unknown => Type::Any,
+                    Type::Unknown => Type::Unknown,
                     Type::Named { id, .. } => match &self.table.get(*id).kind {
                         TypeKind::Dict { key, value } => {
                             let (key, value) = (key.clone(), value.clone());
@@ -1064,8 +1246,13 @@ impl Checker {
             AstNode::Member { object, name } => {
                 let object_ty = self.check_value(object, None)?;
                 let field_ty = match &object_ty {
-                    Type::Any | Type::Unknown => Type::Any,
-                    Type::Module(_) => return self.err(format!("cannot assign to module member '{}'", name)),
+                    Type::Unknown => Type::Unknown,
+                    Type::Module(id) => {
+                        return self.err(format!(
+                            "'{}' is read-only outside '{}'",
+                            name, self.modules[*id].display
+                        ))
+                    }
                     Type::Variant { .. } => {
                         return self.err(format!("variant fields cannot be modified ('{}')", name))
                     }
@@ -1155,7 +1342,7 @@ impl Checker {
                         Ok(source) => source,
                         Err(e) => return self.err(format!("cannot import '{}': {}", path, e)),
                     };
-                    let display = resolved.display().to_string();
+                    let display = path.to_string();
                     self.check_module(&resolved, &display, &source)?
                 }
             }
@@ -1186,7 +1373,7 @@ impl Checker {
                         found = true;
                     }
                     if !found {
-                        return self.err(format!("module '{}' has no member '{}'", path, name));
+                        return self.missing_member(module_id, name);
                     }
                 }
             }
@@ -1198,48 +1385,43 @@ impl Checker {
         if let Some(id) = self.stdlib.get(name) {
             return *id;
         }
-        let functions: &[&str] = match name {
-            "time" => &["sleep", "now", "monotonic"],
-            "file" => &["open"],
-            "datetime" => &["now", "today", "format", "parse"],
-            "math" => &["abs", "sqrt", "pow", "floor", "ceil", "round"],
-            "http" => &["get", "post", "put", "delete"],
-            "json" => &["parse", "stringify"],
-            "regex" => &["match", "search", "findAll", "replace"],
-            _ => &[],
+        let mut module = ModuleType {
+            display: name.to_string(),
+            ..ModuleType::default()
         };
-        let mut module = ModuleType::default();
-        for function in functions {
+        for function in stdlib_functions(name) {
             module
                 .members
                 .insert(function.to_string(), Symbol::builtin(&format!("{}.{}", name, function)));
         }
         let b = self.builtins;
-        match name {
-            "math" => {
-                module.members.insert("pi".to_string(), Symbol::value(Type::Float, true));
-                module.members.insert("e".to_string(), Symbol::value(Type::Float, true));
-            }
-            "file" => {
-                module.types.insert("File".to_string(), TypeRef::Type(Self::named(b.file)));
-            }
-            "datetime" => {
-                module
-                    .types
-                    .insert("DateTime".to_string(), TypeRef::Type(Self::named(b.datetime)));
-            }
-            "http" => {
-                module
-                    .types
-                    .insert("Response".to_string(), TypeRef::Type(Self::named(b.response)));
-            }
-            "regex" => {
-                module
-                    .types
-                    .insert("Match".to_string(), TypeRef::Type(Self::named(b.regex_match)));
-            }
-            _ => {}
+        if name == "math" {
+            module.members.insert("pi".to_string(), Symbol::value(Type::Float, true));
+            module.members.insert("e".to_string(), Symbol::value(Type::Float, true));
         }
+        let object_types: &[(&str, TypeId)] = match name {
+            "file" => &[("File", b.file)],
+            "datetime" => &[("DateTime", b.datetime)],
+            "http" => &[("Response", b.response)],
+            "json" => &[("JsonObject", b.json_object)],
+            "regex" => &[("Match", b.regex_match)],
+            _ => &[],
+        };
+        for (type_name, id) in object_types {
+            module
+                .types
+                .insert(type_name.to_string(), TypeRef::Type(Self::named(*id)));
+        }
+        // Sum types of the module (`FileError`, `Json`...), with their constructors.
+        let mut constructors = Scope::default();
+        for sum in BUILTIN_SUMS.iter().filter(|sum| sum.module == Some(name)) {
+            let id = self.builtin_sum_id(sum.name);
+            module
+                .types
+                .insert(sum.name.to_string(), TypeRef::Type(Self::named(id)));
+            self.declare_constructors_into(&mut constructors, id);
+        }
+        module.members.extend(constructors.vars);
         self.modules.push(module);
         let id = self.modules.len() - 1;
         self.stdlib.insert(name.to_string(), id);
@@ -1400,7 +1582,7 @@ impl Checker {
             AstNode::Unary { op, operand } => {
                 let ty = self.check_value(operand, None)?;
                 match (op, &ty) {
-                    (_, Type::Any) => Ok(Type::Any),
+                    (_, Type::Unknown) => Ok(Type::Unknown),
                     (UnaryOperator::Negate, Type::Int | Type::Float) => Ok(ty),
                     (UnaryOperator::Not, Type::Boolean) => Ok(Type::Boolean),
                     (UnaryOperator::BitNot, Type::Int) => Ok(Type::Int),
@@ -1437,7 +1619,7 @@ impl Checker {
                         self.expect_type(&Type::Int, &index_ty, "string index")?;
                         Ok(Type::String)
                     }
-                    Type::Any | Type::Unknown => Ok(Type::Any),
+                    Type::Unknown => Ok(Type::Unknown),
                     Type::Named { id, .. } => match &self.table.get(*id).kind {
                         TypeKind::Dict { key, value } => {
                             let (key, value) = (key.clone(), value.clone());
@@ -1560,7 +1742,7 @@ impl Checker {
             Type::Named { id, .. } | Type::Variant { id, .. } if *id == variant_type => {
                 Ok(Some(Type::Boolean))
             }
-            Type::Any | Type::Unknown => Ok(Some(Type::Boolean)),
+            Type::Unknown => Ok(Some(Type::Boolean)),
             other => self.err(format!(
                 "'{}' is not a variant of {}",
                 variant,
@@ -1576,7 +1758,7 @@ impl Checker {
             return Ok(if comparison || matches!(op, And | Or) {
                 Type::Boolean
             } else {
-                Type::Any
+                Type::Unknown
             });
         }
         let numeric = left.is_numeric() && right.is_numeric();
@@ -1735,9 +1917,9 @@ impl Checker {
                     }
                     _ => Ok(symbol.ty),
                 },
-                None => self.err(format!("module has no member '{}'", name)),
+                None => self.missing_member(*id, name),
             },
-            Type::Any | Type::Unknown => Ok(Type::Any),
+            Type::Unknown => Ok(Type::Unknown),
             Type::String | Type::List(_) => {
                 self.err(format!("method '{}' must be called: '{}()'", name, name))
             }
@@ -1797,11 +1979,11 @@ impl Checker {
                 self.check_args(params, args)?;
                 Ok((**ret).clone())
             }
-            Type::Any | Type::Unknown => {
+            Type::Unknown => {
                 for arg in args {
                     self.check_value(arg, None)?;
                 }
-                Ok(Type::Any)
+                Ok(Type::Unknown)
             }
             other => self.err(format!("a value of type {} cannot be called", self.show(other))),
         }
@@ -1958,8 +2140,17 @@ impl Checker {
             }
             Ok(())
         };
+        let result_with = |ok: Type, error: TypeId| Type::Named {
+            id: b.result,
+            args: vec![ok, Self::named(error)],
+        };
+        let json = Self::named(b.json);
         match name {
             "print" => Ok(Type::Void),
+            "panic" => {
+                check(self, &[s])?;
+                Ok(Type::Never)
+            }
             "input" => {
                 self.arity(name, &types, 0, 1)?;
                 if let Some(prompt) = types.first() {
@@ -1979,8 +2170,8 @@ impl Checker {
                 let target = if name == "int" { Type::Int } else { Type::Float };
                 match &types[0] {
                     Type::Int | Type::Float | Type::Boolean => Ok(target),
-                    Type::String => Ok(self.result_of(target, Type::String)),
-                    Type::Any | Type::Unknown => Ok(Type::Any),
+                    Type::String => Ok(result_with(target, b.parse_error)),
+                    Type::Unknown => Ok(Type::Unknown),
                     other => self.err(format!("cannot convert {} to {}", self.show(other), name)),
                 }
             }
@@ -2001,7 +2192,7 @@ impl Checker {
 
             "file.open" => {
                 check(self, &[s.clone(), s])?;
-                Ok(Self::named(b.file))
+                Ok(result_with(Self::named(b.file), b.file_error))
             }
 
             "datetime.now" => {
@@ -2020,7 +2211,7 @@ impl Checker {
             }
             "datetime.parse" => {
                 check(self, &[s.clone(), s])?;
-                Ok(Type::Int)
+                Ok(result_with(Type::Int, b.date_error))
             }
 
             "math.abs" => {
@@ -2031,13 +2222,13 @@ impl Checker {
             "math.sqrt" => {
                 self.arity(name, &types, 1, 1)?;
                 self.expect_numeric_arg(name, 0, &types[0])?;
-                Ok(Type::Float)
+                Ok(result_with(Type::Float, b.math_error))
             }
             "math.pow" => {
                 self.arity(name, &types, 2, 2)?;
                 self.expect_numeric_arg(name, 0, &types[0])?;
                 self.expect_numeric_arg(name, 1, &types[1])?;
-                Ok(Type::Float)
+                Ok(result_with(Type::Float, b.math_error))
             }
             "math.floor" | "math.ceil" | "math.round" => {
                 self.arity(name, &types, 1, 1)?;
@@ -2047,20 +2238,34 @@ impl Checker {
 
             "http.get" | "http.delete" => {
                 check(self, &[s])?;
-                Ok(Self::named(b.response))
+                Ok(result_with(Self::named(b.response), b.http_error))
             }
             "http.post" | "http.put" => {
                 check(self, &[s.clone(), s])?;
-                Ok(Self::named(b.response))
+                Ok(result_with(Self::named(b.response), b.http_error))
             }
 
             "json.parse" => {
                 check(self, &[s])?;
-                Ok(Type::Any)
+                Ok(result_with(json, b.json_error))
             }
             "json.stringify" => {
-                self.arity(name, &types, 1, 1)?;
+                check(self, &[json])?;
                 Ok(Type::String)
+            }
+            "json.get" => {
+                check(self, &[json.clone(), s])?;
+                Ok(self.option_of(json))
+            }
+            "json.asString" | "json.asInt" | "json.asFloat" | "json.asBool" => {
+                check(self, &[json])?;
+                let value = match name {
+                    "json.asString" => Type::String,
+                    "json.asInt" => Type::Int,
+                    "json.asFloat" => Type::Float,
+                    _ => Type::Boolean,
+                };
+                Ok(self.option_of(value))
             }
 
             "regex.match" => {
@@ -2093,7 +2298,7 @@ impl Checker {
         if let Type::Module(id) = object_ty {
             let symbol = match self.modules[*id].members.get(name) {
                 Some(symbol) => symbol.clone(),
-                None => return self.err(format!("module has no member '{}'", name)),
+                None => return self.missing_member(*id, name),
             };
             return match symbol.kind {
                 SymbolKind::Builtin(builtin) => self.check_builtin_call(&builtin, args),
@@ -2119,11 +2324,11 @@ impl Checker {
                 "length" => Some((vec![], Type::Int)),
                 _ => None,
             },
-            Type::Any | Type::Unknown => {
+            Type::Unknown => {
                 for arg in args {
                     self.check_value(arg, None)?;
                 }
-                return Ok(Type::Any);
+                return Ok(Type::Unknown);
             }
             Type::Named { id, .. } => match &self.table.get(*id).kind {
                 TypeKind::Dict { .. } if name == "length" => Some((vec![], Type::Int)),
@@ -2230,7 +2435,7 @@ impl Checker {
             Pattern::Variant { name, args } => {
                 if ty.is_dynamic() {
                     for arg in args {
-                        self.check_pattern(arg, &Type::Any)?;
+                        self.check_pattern(arg, &Type::Unknown)?;
                     }
                     return Ok(());
                 }

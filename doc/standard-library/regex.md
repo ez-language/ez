@@ -119,6 +119,7 @@ if (result is Some) {
 
 ## Notes
 
+-   An invalid pattern is reported as a panic for now. A `regex.compile(pattern) -> Result[Regex, RegexError]` function is planned, so that invalid patterns can be handled as errors (see the [compiler plan](../compiler-plan.md)).
 -   The regex syntax is Perl-style (character classes, groups, quantifiers, anchors). Look-around and backreferences are not supported.
 -   `start` and `end` are character positions (`end` is exclusive).
 -   To learn more about regex syntax, visit: [https://regex101.com/](https://regex101.com/)

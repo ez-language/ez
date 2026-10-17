@@ -12,7 +12,10 @@ age: int = 23
 
 ```ez
 const pi: float = 3.14
+const avogadro: float = 6.022e23 // scientific notation
 ```
+
+A float literal too large to be represented (`1e400`) is a compile-time error.
 
 When a numeric result does not fit in an `int` or a `float` (a representation limit), the program panics. For example, `9223372036854775807 + 1` and `1e308 * 10` stop the program. Results that do not exist in the real numbers (a domain problem, like the square root of a negative number) are reported by the `math` functions as a `MathError` (see [math](standard-library/math.md)).
 
