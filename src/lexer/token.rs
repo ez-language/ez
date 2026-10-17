@@ -38,7 +38,6 @@ pub enum Token {
     Star,
     StarStar,
     Slash,
-    SlashSlash,
     Percent,
     Ampersand,
     Pipe,
@@ -53,7 +52,6 @@ pub enum Token {
     StarEqual,
     StarStarEqual,
     SlashEqual,
-    SlashSlashEqual,
     PercentEqual,
     Bang,
     BangEqual,
@@ -79,22 +77,6 @@ pub enum Token {
 }
 
 impl Token {
-    /// Tokens that end an operand; used to tell `//` (integer division) apart from a comment.
-    pub fn ends_operand(&self) -> bool {
-        matches!(
-            self,
-            Token::Identifier(_)
-                | Token::Int(_)
-                | Token::Float(_)
-                | Token::StringLiteral(_)
-                | Token::TemplateString(_)
-                | Token::Boolean(_)
-                | Token::RParen
-                | Token::RBracket
-                | Token::RBrace
-        )
-    }
-
     /// Keyword spelling, so keywords can still be used as member names (`regex.match(...)`).
     pub fn keyword_name(&self) -> Option<&'static str> {
         let name = match self {

@@ -9,8 +9,6 @@ pub struct Lexer {
     position: usize,
     line: usize,
     column: usize,
-    /// Last token produced and the line it was on (used to disambiguate `//`).
-    previous: Option<(Token, usize)>,
 }
 
 impl Lexer {
@@ -20,7 +18,6 @@ impl Lexer {
             position: 0,
             line: 1,
             column: 1,
-            previous: None,
         }
     }
 
@@ -30,10 +27,6 @@ impl Lexer {
 
     fn peek(&self) -> Option<char> {
         self.input.get(self.position + 1).copied()
-    }
-
-    fn peek_at(&self, offset: usize) -> Option<char> {
-        self.input.get(self.position + offset).copied()
     }
 
     fn advance(&mut self) {
@@ -106,10 +99,7 @@ impl Lexer {
             self.skip_whitespace();
             if self.current() == Some('/') && self.peek() == Some('*') {
                 self.skip_block_comment();
-            } else if self.current() == Some('/')
-                && self.peek() == Some('/')
-                && self.is_line_comment()
-            {
+            } else if self.current() == Some('/') && self.peek() == Some('/') {
                 self.skip_line_comment();
             } else {
                 break;
@@ -119,28 +109,10 @@ impl Lexer {
         let line = self.line;
         let column = self.column;
         let token = self.read_token();
-        self.previous = Some((token.clone(), line));
         SpannedToken {
             token,
             line,
             column,
-        }
-    }
-
-    /// `//` is a comment unless it directly follows an operand on the same line and is
-    /// immediately followed by a non-space character (`a //b`, `a//b`) or by `=` (`a //= b`).
-    fn is_line_comment(&self) -> bool {
-        let after_operand = match &self.previous {
-            Some((token, line)) => *line == self.line && token.ends_operand(),
-            None => false,
-        };
-        if !after_operand {
-            return true;
-        }
-        match self.peek_at(2) {
-            Some('=') => false,
-            Some(c) => c.is_whitespace(),
-            None => true,
         }
     }
 
@@ -176,14 +148,7 @@ impl Lexer {
                     _ => Token::Star,
                 }
             }
-            Some('/') => {
-                self.advance();
-                match self.current() {
-                    Some('/') => self.one_or_two('=', Token::SlashSlashEqual, Token::SlashSlash),
-                    Some('=') => self.single(Token::SlashEqual),
-                    _ => Token::Slash,
-                }
-            }
+            Some('/') => self.one_or_two('=', Token::SlashEqual, Token::Slash),
             Some('>') => {
                 self.advance();
                 match self.current() {
@@ -372,21 +337,22 @@ mod tests {
     }
 
     #[test]
-    fn integer_division_without_space() {
+    fn double_slash_is_always_a_comment() {
         assert_eq!(
-            lex("a //b"),
+            lex("a //b\nc //= 2"),
             vec![
                 Token::Identifier("a".to_string()),
-                Token::SlashSlash,
-                Token::Identifier("b".to_string()),
+                Token::Identifier("c".to_string()),
                 Token::EOF
             ]
         );
         assert_eq!(
-            lex("a //= 2"),
+            lex("a / b /= 2"),
             vec![
                 Token::Identifier("a".to_string()),
-                Token::SlashSlashEqual,
+                Token::Slash,
+                Token::Identifier("b".to_string()),
+                Token::SlashEqual,
                 Token::Int(2),
                 Token::EOF
             ]

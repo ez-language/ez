@@ -1589,13 +1589,13 @@ impl Checker {
                 (Type::List(_), Type::List(_)) => self.join(left, right),
                 _ => None,
             },
-            Subtract | Multiply | Modulo | Power | IntDivide if both_int => Some(Type::Int),
-            Subtract | Multiply | Modulo | Power | IntDivide if numeric => Some(Type::Float),
+            // Like Go and Rust: dividing ints gives an int, dividing floats gives a float.
+            Subtract | Multiply | Divide | Modulo | Power if both_int => Some(Type::Int),
+            Subtract | Multiply | Divide | Modulo | Power if numeric => Some(Type::Float),
             Multiply => match (left, right) {
                 (Type::String, Type::Int) | (Type::Int, Type::String) => Some(Type::String),
                 _ => None,
             },
-            Divide if numeric => Some(Type::Float),
             Greater | GreaterEqual | Less | LessEqual
                 if numeric || (*left == Type::String && *right == Type::String) =>
             {

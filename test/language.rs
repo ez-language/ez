@@ -187,14 +187,26 @@ fn lists() {
 #[test]
 fn arithmetic_operators() {
     assert_eq!(
-        run("print(1 + 2, 5 - 7, 3 * 4, 7 / 2, 7 //2, 2 ** 10, 7 % 3, -7 //2, 2.5 * 2)"),
-        "3 -2 12 3.5 3 1024 1 -4 5.0\n"
+        run("print(1 + 2, 5 - 7, 3 * 4, 2 ** 10, 7 % 3, 2.5 * 2)"),
+        "3 -2 12 1024 1 5.0\n"
     );
 }
 
 #[test]
-fn integer_division_is_not_a_comment() {
-    assert_eq!(run("x = 17\ny = x//5\nx //= 2\nprint(y, x)"), "3 8\n");
+fn division_follows_the_operand_types() {
+    // Like Go and Rust: ints give a truncated int, floats give a float.
+    assert_eq!(
+        run("print(7 / 2, -7 / 2, 7.0 / 2.0, 7 / 2.0, -7 % 2, 7.5 % 2.0)"),
+        "3 -3 3.5 3.5 -1 1.5\n"
+    );
+    assert_eq!(run("x: int = 17\nx /= 5\nprint(x)"), "3\n");
+    assert_error("x: int = 7 / 2.0", "cannot assign a value of type float");
+    assert_error("print(1 / 0)", "division by zero");
+}
+
+#[test]
+fn double_slash_is_always_a_comment() {
+    assert_eq!(run("x = 7 //2\nprint(x)"), "7\n");
 }
 
 #[test]
@@ -237,7 +249,7 @@ fn assignment_operators() {
         e += 1
         e -= 2
         e *= 3
-        e //= 2
+        e /= 2
         e **= 2
         e %= 7
         f = 1.0

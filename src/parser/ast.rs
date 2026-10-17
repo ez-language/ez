@@ -13,7 +13,6 @@ pub enum BinaryOperator {
     Subtract,
     Multiply,
     Divide,
-    IntDivide,
     Power,
     Modulo,
     Equal,
@@ -40,7 +39,6 @@ impl BinaryOperator {
             BinaryOperator::Subtract => "-",
             BinaryOperator::Multiply => "*",
             BinaryOperator::Divide => "/",
-            BinaryOperator::IntDivide => "//",
             BinaryOperator::Power => "**",
             BinaryOperator::Modulo => "%",
             BinaryOperator::Equal => "==",
@@ -69,7 +67,6 @@ pub enum AssignOperator {
     Subtract,
     Multiply,
     Divide,
-    IntDivide,
     Power,
     Modulo,
 }
@@ -83,7 +80,6 @@ impl AssignOperator {
             AssignOperator::Subtract => Some(BinaryOperator::Subtract),
             AssignOperator::Multiply => Some(BinaryOperator::Multiply),
             AssignOperator::Divide => Some(BinaryOperator::Divide),
-            AssignOperator::IntDivide => Some(BinaryOperator::IntDivide),
             AssignOperator::Power => Some(BinaryOperator::Power),
             AssignOperator::Modulo => Some(BinaryOperator::Modulo),
         }

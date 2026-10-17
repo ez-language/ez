@@ -728,28 +728,18 @@ impl Interpreter {
             (Add, Value::Int(a), Value::Int(b)) => a.checked_add(*b).map(Value::Int).ok_or_else(overflow),
             (Subtract, Value::Int(a), Value::Int(b)) => a.checked_sub(*b).map(Value::Int).ok_or_else(overflow),
             (Multiply, Value::Int(a), Value::Int(b)) => a.checked_mul(*b).map(Value::Int).ok_or_else(overflow),
-            (Divide, Value::Int(_) | Value::Float(_), Value::Int(_) | Value::Float(_)) => {
-                let (a, b) = (as_float(&left), as_float(&right));
-                if b == 0.0 {
-                    return Err(self.error("division by zero"));
-                }
-                Ok(Value::Float(a / b))
-            }
-            (IntDivide | Modulo, Value::Int(a), Value::Int(b)) => {
+            // Like Go and Rust: integer division truncates toward zero and the remainder has
+            // the sign of the dividend, so `a == (a / b) * b + a % b`.
+            (Divide | Modulo, Value::Int(a), Value::Int(b)) => {
                 if *b == 0 {
                     return Err(self.error("division by zero"));
                 }
-                let quotient = a.checked_div(*b).ok_or_else(overflow)?;
-                let quotient = if (a % b != 0) && ((*a < 0) != (*b < 0)) {
-                    quotient - 1
+                let result = if op == Divide {
+                    a.checked_div(*b)
                 } else {
-                    quotient
+                    a.checked_rem(*b)
                 };
-                if op == IntDivide {
-                    Ok(Value::Int(quotient))
-                } else {
-                    Ok(Value::Int(a - b * quotient))
-                }
+                result.map(Value::Int).ok_or_else(overflow)
             }
             (Power, Value::Int(a), Value::Int(b)) => {
                 if *b < 0 {
@@ -759,7 +749,7 @@ impl Interpreter {
                 a.checked_pow(exponent).map(Value::Int).ok_or_else(overflow)
             }
             (
-                Add | Subtract | Multiply | IntDivide | Modulo | Power,
+                Add | Subtract | Multiply | Divide | Modulo | Power,
                 Value::Int(_) | Value::Float(_),
                 Value::Int(_) | Value::Float(_),
             ) => {
@@ -773,11 +763,10 @@ impl Interpreter {
                         if b == 0.0 {
                             return Err(self.error("division by zero"));
                         }
-                        let quotient = (a / b).floor();
-                        if op == IntDivide {
-                            quotient
+                        if op == Divide {
+                            a / b
                         } else {
-                            a - b * quotient
+                            a % b
                         }
                     }
                 };

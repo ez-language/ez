@@ -7,18 +7,21 @@
 | `+`      | Addition or concat                |
 | `-`      | Subtraction                       |
 | `*`      | Multiplication                    |
-| `/`      | Division (always returns a float) |
-| `//`     | Integer Division (floor division) |
+| `/`      | Division                          |
 | `**`     | Exponentiation                    |
 | `%`      | Modulus (remainder)               |
 
-`//` is also the start of a comment. It is read as integer division only when it comes right after a value on the same line **and** is immediately followed by a non-space character (or by `=`, for `//=`):
+Division follows the type of the operands, as in Go and Rust: dividing two `int` values gives an `int` (truncated toward zero), and dividing `float` values gives a `float`. If one operand is a `float`, the result is a `float`. The remainder `%` has the sign of the dividend.
 
 ```ez
-x = 7 //2     // 3
-x //= 2       // 1
-y = 7 // 2    // y is 7 — `// 2` is a comment
+7 / 2      // 3
+-7 / 2     // -3
+7.0 / 2.0  // 3.5
+7 / 2.0    // 3.5
+-7 % 2     // -1
 ```
+
+`//` is always a comment (see [Comments](comments.md)).
 
 ## Comparison Operators
 
@@ -87,7 +90,6 @@ if not (age > 18) { ... }
 | `-=`     | Subtract and assign                        |
 | `*=`     | Multiply and assign                        |
 | `/=`     | Divide and assign                          |
-| `//=`    | Integer Divide and assign                  |
 | `**=`    | Exponentiate and assign                    |
 | `%=`     | Modulus and assign                         |
 
