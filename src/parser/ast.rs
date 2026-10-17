@@ -252,11 +252,14 @@ pub enum AstNode {
         op: AssignOperator,
         value: Box<AstNode>,
     },
+    /// `var` (mutable), `const` (cannot be reassigned, contents can change) or `imut` (nothing
+    /// can change).
     VarDecl {
         name: String,
         ty: Option<TypeExpr>,
         value: Box<AstNode>,
         is_const: bool,
+        is_imut: bool,
     },
     FunctionDecl {
         name: String,

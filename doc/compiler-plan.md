@@ -81,7 +81,7 @@ type JsonObject = {
 
 Everything in a module is private by default. Only declarations marked with `export` can be imported.
 
--   Exportable: `export function`, `export const`, `export var` and `export type`.
+-   Exportable: `export function`, `export var`, `export const`, `export imut` and `export type`.
 -   Exporting a sum type also exports its variants.
 -   `export` is only allowed at the top level of a file.
 -   Implicit declarations (`x = 1`) cannot be exported.
@@ -178,7 +178,7 @@ print(b)       // [9, 2, 3]
 Consequences:
 
 -   **`is` only tests variants** (`result is Some`). There is no reference identity; `==` compares values.
--   **`const` is deeply immutable**: neither the variable nor its contents can change (`const person` cannot have `person.age = 31`).
+-   **Three mutability levels**: `var` (everything can change), `const` (the variable cannot be reassigned, its contents can change, as in TypeScript) and `imut` (neither the variable nor its contents can change). `imut` is checked at compile time. With value semantics, `const` only prevents replacing the value as a whole. A separate keyword for compile-time constants is not needed: the compiler can recognize an `imut` with a literal value by itself. Until the interpreter uses copy-on-write, an `imut` list passed to a function can still be changed there, because it is shared by reference.
 -   **`defer` is not needed**: dropping releases resources. It may come back later as an optional feature, for cleanup that does not belong to any value.
 -   **Resource types are move-only.** A `File` cannot be copied (two copies would close the same file): `g = f` moves it, and using `f` afterwards is a compile error. `f.close()` consumes `f`, so using a closed file is a compile error instead of a panic.
 

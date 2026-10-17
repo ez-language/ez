@@ -9,6 +9,7 @@ pub enum Token {
     Boolean(bool),
     Var,
     Const,
+    Imut,
     Type,
     Interface,
     Import,
@@ -85,6 +86,7 @@ impl Token {
         let name = match self {
             Token::Var => "var",
             Token::Const => "const",
+            Token::Imut => "imut",
             Token::Type => "type",
             Token::Interface => "interface",
             Token::Import => "import",

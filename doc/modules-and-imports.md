@@ -16,7 +16,7 @@ export function subtract(a: int, b: int): int {
 }
 ```
 
-Everything in a module is private by default. Only declarations marked with `export` (functions, constants, variables and types) can be imported by other modules. Exporting a sum type also exports its variants.
+Everything in a module is private by default. Only declarations marked with `export` (functions, `var`, `const` and `imut` variables, and types) can be imported by other modules. Exporting a sum type also exports its variants.
 
 ```ez
 // file: math.ez
@@ -30,7 +30,7 @@ export const pi: float = 3.14159
 import { clamp } from 'math.ez' // Error! 'clamp' is not exported by 'math.ez'
 ```
 
-`export` is only allowed at the top level of a file, and must be followed by `function`, `const`, `var` or `type`. A declaration without a keyword (`x = 1`) cannot be exported.
+`export` is only allowed at the top level of a file, and must be followed by `function`, `var`, `const`, `imut` or `type`. A declaration without a keyword (`x = 1`) cannot be exported.
 
 ## Using Modules:
 

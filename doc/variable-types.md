@@ -1,6 +1,12 @@
 # Variable Types
 
-The `ez` language provides two main variable types that control mutability and scope:
+The `ez` language provides three variable types that control mutability:
+
+| Keyword | Reassign the variable | Change its contents |
+| ------- | --------------------- | ------------------- |
+| `var`   | yes                   | yes                 |
+| `const` | no                    | yes                 |
+| `imut`  | no                    | no                  |
 
 ## `var`
 
@@ -50,9 +56,9 @@ print(count) // 1
 
 ## `const`
 
--   **Mutability**: Immutable
--   **Scope**: Global or Local (like var)
--   **Description**: The `const` type is used to create variables that cannot be changed after their initial assignment. Attempting to modify a `const` variable will result in an error. Its scope depends on where it's declared — global or local.
+-   **Mutability**: The variable cannot be reassigned; its contents can change
+-   **Scope**: Block (like `var`)
+-   **Description**: The `const` type is used to create variables that cannot be reassigned after their initial assignment. Attempting to reassign a `const` variable will result in an error.
 
 **Example**:
 
@@ -61,8 +67,8 @@ const pi = 3.14159
 pi = 3.14 // Error! Cannot modify a 'const' value
 ```
 
-The `const` keyword defines an immutable variable — it cannot be reassigned.
-However, if the constant is a reference type (such as an object or array), its internal contents can be mutated:
+The `const` keyword defines a variable that cannot be reassigned.
+However, if its value has contents (an object or a list), they can still be changed:
 
 ```ez
 type Person = {
@@ -76,5 +82,31 @@ const person: Person = {
 }
 
 person.age = 31 // Change the value of person age
-person = {} // Error! Cannot modify a 'const' value
+person = { name: 'Bia', age: 25 } // Error! Cannot modify a 'const' value
+```
+
+## `imut`
+
+-   **Mutability**: Fully immutable: neither the variable nor its contents can change
+-   **Scope**: Block (like `var`)
+-   **Description**: The `imut` type is used for values that never change. Changing a field, an element or a nested value is an error, as well as reassigning the variable.
+
+**Example**:
+
+```ez
+type Person = {
+	name: string
+	age: int
+}
+
+imut person: Person = {
+	name: 'Ana',
+	age: 30
+}
+
+person.age = 31 // Error! cannot modify 'person': it is imut
+
+imut matrix = [[1, 2], [3, 4]]
+
+matrix[0][0] = 5 // Error! cannot modify 'matrix': it is imut
 ```

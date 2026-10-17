@@ -163,6 +163,30 @@ fn const_reference_contents_can_change() {
 }
 
 #[test]
+fn imut_is_deeply_immutable() {
+    let source = r#"
+        type Person = {
+            name: string
+            age: int
+        }
+        imut person: Person = { name: 'Ana', age: 30 }
+        imut matrix = [[1, 2], [3, 4]]
+        print(person.age, matrix[1][0])
+    "#;
+    assert_eq!(run(source), "30 3\n");
+    assert_error(
+        "type P = { age: int }\nimut person: P = { age: 30 }\nperson.age = 31",
+        "cannot modify 'person': it is imut",
+    );
+    assert_error("imut items = [1, 2]\nitems[0] = 5", "cannot modify 'items': it is imut");
+    assert_error("imut matrix = [[1]]\nmatrix[0][0] = 5", "cannot modify 'matrix': it is imut");
+    assert_error("imut x = 1\nx = 2", "cannot modify 'x': it is imut");
+    assert_error("imut x = 1\nx += 2", "cannot modify 'x': it is imut");
+    // const only forbids reassigning the variable.
+    assert_eq!(run("const items = [1, 2]\nitems[0] = 5\nprint(items)"), "[5, 2]\n");
+}
+
+#[test]
 fn comments() {
     let source = "// Single-line comment\n/*\nMulti-line\ncomment\n*/\nprint('ok') // trailing";
     assert_eq!(run(source), "ok\n");
@@ -930,6 +954,8 @@ fn modules_and_imports() {
 
         export var count = 0
 
+        export imut origin = [0, 0]
+
         export function increment() {
             count += 1
         }
@@ -968,12 +994,13 @@ fn modules_and_imports() {
     fails("import math from 'math.ez'\nprint(math.clamp(1))", "'clamp' is not exported by 'math.ez'");
     fails("import { count } from 'math.ez'\ncount = 5", "'count' is read-only outside 'math.ez'");
     fails("import math from 'math.ez'\nmath.count = 5", "'count' is read-only outside 'math.ez'");
+    fails("import { origin } from 'math.ez'\norigin[0] = 1", "cannot modify 'origin': it is imut");
 }
 
 #[test]
 fn export_rules() {
     assert_error("function f() {\n export const x = 1\n}", "only allowed at the top level");
-    assert_error("export x = 1", "expected 'function', 'const', 'var' or 'type'");
+    assert_error("export x = 1", "expected 'function', 'const', 'imut', 'var' or 'type'");
     assert_error(
         "type Hidden = { value: int }\nexport function make(): Hidden { return { value: 1 } }",
         "uses the private type 'Hidden'",

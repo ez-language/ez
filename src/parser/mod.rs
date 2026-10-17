@@ -240,17 +240,22 @@ impl Parser {
             Token::Var => {
                 self.advance();
                 let name = self.expect_identifier("variable name")?;
-                self.finish_declaration(name, false)
+                self.finish_declaration(name, false, false)
             }
             Token::Const => {
                 self.advance();
                 let name = self.expect_identifier("constant name")?;
-                self.finish_declaration(name, true)
+                self.finish_declaration(name, true, false)
+            }
+            Token::Imut => {
+                self.advance();
+                let name = self.expect_identifier("constant name")?;
+                self.finish_declaration(name, true, true)
             }
             // `name: type = value`
             Token::Identifier(_) if *self.peek() == Token::Colon => {
                 let name = self.expect_identifier("variable name")?;
-                self.finish_declaration(name, false)
+                self.finish_declaration(name, false, false)
             }
             _ => self.parse_expression_statement(),
         }
@@ -311,7 +316,12 @@ impl Parser {
     }
 
     /// After the name: `[: type] = value`.
-    fn finish_declaration(&mut self, name: String, is_const: bool) -> Result<AstNode, EzError> {
+    fn finish_declaration(
+        &mut self,
+        name: String,
+        is_const: bool,
+        is_imut: bool,
+    ) -> Result<AstNode, EzError> {
         let ty = if *self.current() == Token::Colon {
             self.advance();
             Some(self.parse_type()?)
@@ -325,6 +335,7 @@ impl Parser {
             ty,
             value: Box::new(value),
             is_const,
+            is_imut,
         })
     }
 
@@ -522,10 +533,10 @@ impl Parser {
         self.advance(); // export
         if !matches!(
             self.current(),
-            Token::Func | Token::Const | Token::Var | Token::Type
+            Token::Func | Token::Const | Token::Imut | Token::Var | Token::Type
         ) {
             return self.error_here(format!(
-                "expected 'function', 'const', 'var' or 'type' after 'export', found {:?}",
+                "expected 'function', 'const', 'imut', 'var' or 'type' after 'export', found {:?}",
                 self.current()
             ));
         }
@@ -1413,6 +1424,7 @@ mod tests {
                 ty,
                 value,
                 is_const,
+                ..
             } => {
                 assert_eq!(name.as_str(), "label");
                 assert!(*is_const);

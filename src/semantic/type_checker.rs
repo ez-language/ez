@@ -46,7 +46,10 @@ enum SymbolKind {
 #[derive(Debug, Clone)]
 struct Symbol {
     ty: Type,
+    /// The variable cannot be reassigned (`const`, `imut`, functions...).
     is_const: bool,
+    /// Its contents cannot change either (`imut`).
+    is_imut: bool,
     kind: SymbolKind,
     /// Module that declared the symbol, when it was imported: it is read-only here.
     owner: Option<String>,
@@ -57,6 +60,7 @@ impl Symbol {
         Symbol {
             ty,
             is_const,
+            is_imut: false,
             kind: SymbolKind::Value,
             owner: None,
         }
@@ -66,6 +70,7 @@ impl Symbol {
         Symbol {
             ty: Type::Void,
             is_const: true,
+            is_imut: true,
             kind: SymbolKind::Builtin(name.to_string()),
             owner: None,
         }
@@ -362,6 +367,7 @@ impl Checker {
                     Symbol {
                         ty,
                         is_const: true,
+                        is_imut: true,
                         kind: SymbolKind::Constructor {
                             id,
                             variant: variant.name.clone(),
@@ -1037,6 +1043,7 @@ impl Checker {
                 ty,
                 value,
                 is_const,
+                is_imut,
             } => {
                 let declared = match ty {
                     Some(ty) => Some(self.resolve_type(ty)?),
@@ -1057,7 +1064,9 @@ impl Checker {
                     }
                     None => value_ty,
                 };
-                self.declare(name, Symbol::value(var_ty, *is_const))?;
+                let mut symbol = Symbol::value(var_ty, *is_const);
+                symbol.is_imut = *is_imut;
+                self.declare(name, symbol)?;
                 Ok(Type::Void)
             }
             AstNode::Assign { target, op, value } => {
@@ -1210,6 +1219,9 @@ impl Checker {
                 if !matches!(symbol.kind, SymbolKind::Value) || matches!(symbol.ty, Type::Module(_)) {
                     return self.err(format!("cannot assign to '{}'", name));
                 }
+                if symbol.is_imut {
+                    return self.err(format!("cannot modify '{}': it is imut", name));
+                }
                 if symbol.is_const {
                     return self.err(format!("cannot modify a 'const' value ('{}')", name));
                 }
@@ -1223,6 +1235,7 @@ impl Checker {
                 Ok(())
             }
             AstNode::Index { target: inner, index } => {
+                self.ensure_contents_mutable(inner)?;
                 let container = self.check_value(inner, None)?;
                 let index_ty = self.check_value(index, None)?;
                 let element = match &container {
@@ -1246,6 +1259,7 @@ impl Checker {
                 Ok(())
             }
             AstNode::Member { object, name } => {
+                self.ensure_contents_mutable(object)?;
                 let object_ty = self.check_value(object, None)?;
                 let field_ty = match &object_ty {
                     Type::Unknown => Type::Unknown,
@@ -1287,6 +1301,27 @@ impl Checker {
                 Ok(())
             }
             _ => self.err("invalid assignment target".to_string()),
+        }
+    }
+
+    /// Changing a field or an element (`person.age = 31`, `items[0] = 1`) is not allowed when the
+    /// variable that holds the value is `imut`.
+    fn ensure_contents_mutable(&self, target: &AstNode) -> CheckResult<()> {
+        let mut node = target.unlocated();
+        loop {
+            match node {
+                AstNode::Member { object, .. } => node = object.unlocated(),
+                AstNode::Index { target, .. } => node = target.unlocated(),
+                AstNode::Identifier(name) => {
+                    return match self.lookup(name) {
+                        Some(symbol) if symbol.is_imut && matches!(symbol.kind, SymbolKind::Value) => {
+                            self.err(format!("cannot modify '{}': it is imut", name))
+                        }
+                        _ => Ok(()),
+                    };
+                }
+                _ => return Ok(()),
+            }
         }
     }
 
