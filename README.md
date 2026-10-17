@@ -52,7 +52,7 @@ Access the documentation [here](doc/README.md).
 
 ## Roadmap
 
-For upcoming features and long-term goals, see the [roadmap](doc/roadmap.md).
+For upcoming features and long-term goals, see the [roadmap](doc/roadmap.md). The path to a self-hosted compiler is described in the [compiler plan](doc/compiler-plan.md).
 
 ## Contributions
 

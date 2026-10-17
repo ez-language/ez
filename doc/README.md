@@ -19,3 +19,4 @@ Welcome to **ez Language Documentation**. Here you will find details about sinta
 -   [String Interpolation](string-interpolation.md)
 -   [Modules and Imports](modules-and-imports.md)
 -   [Standard Library](stdlib.md)
+-   [Compiler Plan](compiler-plan.md)
