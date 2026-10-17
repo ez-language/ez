@@ -153,15 +153,36 @@ A variable belongs to the block where it is declared (the file, a function, or a
 
 `import` statements are processed before the rest of their block, so types and functions declared before an `import` can use it (like ES modules).
 
-### Memory management: ownership
+### Memory management: ownership, value semantics and drop
 
-The compiled code will manage memory with **ownership** (to be designed). This replaces the earlier recommendation of a garbage collector. `defer` depends on this design.
+Memory is managed with **ownership**, without a garbage collector. Every value has exactly one owner, and when the owner goes out of scope the value is **dropped**: its memory is released and, for resources, the resource is closed. This is deterministic, so there is no `defer`.
 
-The design has to settle how ownership fits the current semantics, which assume shared references:
+```ez
+function readNotes(): Result[string, file.FileError] {
+    f = file.open('notes.txt', 'r')?
+    content = f.read()?   // on an error, '?' returns and 'f' is closed
+    return Ok(content)    // 'f' goes out of scope: the file is closed
+}
+```
 
--   lists and objects are reference values: a `const` list can be changed, and `is` compares identity;
--   closures capture variables by reference;
--   an exported `var` is read live by importers.
+**Value semantics with copy-on-write**, as in Swift, Hylo and Mojo. Assigning or passing a value gives an independent copy: there is no aliasing, and no variable becomes unusable (unlike a move). Underneath, the memory is shared until one of the copies is modified, so copies are cheap.
+
+```ez
+a = [1, 2, 3]
+b = a          // nothing is copied yet
+b[0] = 9       // the list is copied now, because b changes
+print(a)       // [1, 2, 3]
+print(b)       // [9, 2, 3]
+```
+
+Consequences:
+
+-   **`is` only tests variants** (`result is Some`). There is no reference identity; `==` compares values.
+-   **`const` is deeply immutable**: neither the variable nor its contents can change (`const person` cannot have `person.age = 31`).
+-   **`defer` is not needed**: dropping releases resources. It may come back later as an optional feature, for cleanup that does not belong to any value.
+-   **Resource types are move-only.** A `File` cannot be copied (two copies would close the same file): `g = f` moves it, and using `f` afterwards is a compile error. `f.close()` consumes `f`, so using a closed file is a compile error instead of a panic.
+
+The current interpreter still uses shared references: it will be changed to these semantics in phase 1, so that `ez run` and `ez build` behave the same.
 
 ### `MathError.Indeterminate` stays
 
@@ -299,9 +320,9 @@ A compiler is a large program, with many data structures and many operations tha
 
 ### Semantics to settle before compiling
 
--   **Closures** capture variables by reference. Compiled, captured variables live in heap cells (closure conversion).
+-   **Closures** capture variables by reference today; with value semantics this changes (see [Open decisions](#open-decisions)).
 -   **`int` to `float` coercion** is inconsistent today (an `int` stored in a `float` field of an object stays an `int`). With complete types, every conversion is explicit in the generated code.
--   **Memory management**: ownership (see [Memory management](#memory-management-ownership)); its design is open.
+-   **Memory management**: ownership with value semantics, copy-on-write and drop (see [Memory management](#memory-management-ownership-value-semantics-and-drop)).
 
 ---
 
@@ -325,10 +346,14 @@ Notes:
 
 ## Open decisions
 
-1.  **Ownership design**: the rules (moves, borrowing or another model), and how they fit the current reference semantics listed in [Memory management](#memory-management-ownership).
-2.  **`defer`** to release resources (`defer f.close()`), depending on the ownership design.
-3.  **Standard library API changes**:
+1.  **Value semantics details** (see [Memory management](#memory-management-ownership-value-semantics-and-drop)):
+    -   **Closures**: capture a read-only copy of the variables they use (recommended: assigning to a captured variable is a compile error), or another rule. Patterns like a counter closure would keep their state another way.
+    -   **Functions that modify an argument**: parameters are borrowed read-only, so changing the caller's value needs an explicit marker, like `inout` in Swift and Hylo or `mut` in Mojo. The same applies to methods that modify `self`.
+    -   **Move-only types**: which types are move-only besides the standard library resources, and whether user types can declare it.
+    -   **Drop for user types**: a method named `drop`, called when the value is dropped (once methods exist).
+    -   **Intentionally shared structures** (graphs, caches): indices into a list (arenas) by default; an explicit shared type such as `Shared[T]` later, if needed.
+2.  **Standard library API changes**:
     -   `file.open(path, mode)` with `type Mode = { Read  Write  Append }` instead of `'r'`, `'w'`, `'a'`. Reading a file opened for writing, or using a closed file, panics.
     -   `regex.compile(pattern) -> Result[Regex, RegexError]`, with infallible methods on `Regex`.
     -   A `.message()` method on every standard library error type, returning a human-readable text.
-4.  **Phase 1 syntax**: generic functions (`function first[T](items: T[]): Option[T]`?), method declarations (`function Person.greet()`?), the collections, text and system APIs, and FFI.
+3.  **Phase 1 syntax**: generic functions (`function first[T](items: T[]): Option[T]`?), method declarations (`function Person.greet()`?), the collections, text and system APIs, and FFI.
