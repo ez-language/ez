@@ -11,7 +11,7 @@
 | `**`     | Exponentiation                    |
 | `%`      | Modulus (remainder)               |
 
-Division follows the type of the operands, as in Go and Rust: dividing two `int` values gives an `int` (truncated toward zero), and dividing `float` values gives a `float`. If one operand is a `float`, the result is a `float`. The remainder `%` has the sign of the dividend.
+Division follows the type of the operands: dividing two `int` values gives an `int` (truncated toward zero), and dividing `float` values gives a `float`. If one operand is a `float`, the result is a `float`. The remainder `%` has the sign of the dividend.
 
 ```ez
 7 / 2      // 3
