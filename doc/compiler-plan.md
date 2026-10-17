@@ -166,7 +166,8 @@ type ParseError = {
 // math
 type MathError = {
     Complex          // the result exists only in the complex numbers: sqrt(-1), log(-1)
-    Indeterminate    // indeterminate form
+    Indeterminate    // indeterminate form: pow(0, 0)
+    Infinite         // the result is infinite (a pole): pow(0, -1), log(0)
 }
 ```
 
@@ -178,7 +179,7 @@ type MathError = {
 
 `float` is always a **finite real number**:
 
--   There is no NaN. Math functions whose result is not a real number return `Err(Complex)` or `Err(Indeterminate)`.
+-   There is no NaN. Math functions whose result is not a real number return `Err(Complex)`, `Err(Indeterminate)` or `Err(Infinite)`.
 -   There is no infinity. Float overflow (`1e308 * 10`) panics, like integer overflow.
 -   Float literals that are too large (`1e400`) are compile-time errors.
 -   `float('1e400')` returns `Err(OutOfRange(...))`.
@@ -191,11 +192,11 @@ One rule decides how numeric failures are reported:
 | Problem | Meaning | Handling | Examples |
 | --- | --- | --- | --- |
 | **Representation limit** | The result exists but does not fit in an `int` or a `float` | panic | `9223372036854775807 + 1`, `1e308 * 10`, `math.pow(10, 400)`, `math.round(1e300)` |
-| **Domain problem** | The result does not exist in the real numbers | `Err(MathError)` | `math.sqrt(-1)` → `Complex`, `math.pow(0, 0)` → `Indeterminate` |
+| **Domain problem** | The result does not exist in the real numbers | `Err(MathError)` | `math.sqrt(-1)` → `Complex`, `math.pow(0, 0)` → `Indeterminate`, `math.pow(0, -1)` → `Infinite` |
 
 Operators cannot return a `Result`, so they always panic, including on domain problems such as division by zero.
 
-**Division by zero always panics**, in operators and in functions alike. This includes its equivalents, such as `math.pow(0, -1)` (which is `1 / 0`): it is a bug, like `1 / 0`, so it is not a `MathError` variant.
+In `math` functions, an infinite result (a pole, such as `math.pow(0, -1)`, which is `1 / 0`) is `Err(Infinite)`. It is not an overflow: a larger type would fit an overflowing result, but no type can represent an infinite one. `Infinite` has no sign field, because the sign is always determined by the function (`pow(0, -y)` is always `+∞`, a future `log(0)` always `-∞`). Operators still panic on division by zero.
 
 Float literals support scientific notation (`6.022e23`).
 

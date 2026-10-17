@@ -40,7 +40,7 @@ pub const BUILTIN_SUMS: &[BuiltinSum] = &[
         name: "MathError",
         module: Some("math"),
         params: 0,
-        variants: &[("Complex", &[]), ("Indeterminate", &[])],
+        variants: &[("Complex", &[]), ("Indeterminate", &[]), ("Infinite", &[])],
     },
     BuiltinSum {
         name: "FileError",

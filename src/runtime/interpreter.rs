@@ -754,9 +754,8 @@ impl Interpreter {
                         Err(PowFailure::Indeterminate) => {
                             return Err(self.error("0 ** 0 is indeterminate"))
                         }
-                        Err(PowFailure::DivisionByZero) => {
-                            return Err(self.error("division by zero"))
-                        }
+                        // `0 ** -1` is `1 / 0`.
+                        Err(PowFailure::Infinite) => return Err(self.error("division by zero")),
                         Err(PowFailure::Overflow) => return Err(self.error("float overflow")),
                     },
                     _ => {

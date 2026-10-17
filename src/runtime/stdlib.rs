@@ -152,8 +152,9 @@ pub enum PowFailure {
     Complex,
     /// Domain problem: `0 ** 0`.
     Indeterminate,
-    /// `0 ** -1` is `1 / 0`: a bug, like any division by zero.
-    DivisionByZero,
+    /// Domain problem: the result is infinite (`0 ** -1`, a pole). Not an overflow: no larger
+    /// type could represent it.
+    Infinite,
     /// Representation limit: the result does not fit in a float.
     Overflow,
 }
@@ -163,7 +164,7 @@ pub fn real_pow(x: f64, y: f64) -> Result<f64, PowFailure> {
         return Err(PowFailure::Indeterminate);
     }
     if x == 0.0 && y < 0.0 {
-        return Err(PowFailure::DivisionByZero);
+        return Err(PowFailure::Infinite);
     }
     if x < 0.0 && y.fract() != 0.0 {
         return Err(PowFailure::Complex);
@@ -340,7 +341,7 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
                 Ok(result) => Ok(ok(Value::Float(result))),
                 Err(PowFailure::Complex) => Ok(math_error("Complex")),
                 Err(PowFailure::Indeterminate) => Ok(math_error("Indeterminate")),
-                Err(PowFailure::DivisionByZero) => Err(interpreter.error("division by zero")),
+                Err(PowFailure::Infinite) => Ok(math_error("Infinite")),
                 Err(PowFailure::Overflow) => Err(interpreter.error("float overflow")),
             }
         }

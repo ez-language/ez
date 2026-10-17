@@ -29,7 +29,7 @@ Operators cannot return a `Result`, so an invalid arithmetic operation panics:
 -   results that do not fit in an `int` or a `float` (overflow);
 -   `**` with a result that is not a real number (`(-8.0) ** 0.5`) or indeterminate (`0 ** 0`).
 
-To handle these cases instead of panicking, use `math.pow`, which returns a `MathError` (see [math](standard-library/math.md)).
+To handle the `**` cases instead of panicking, use `math.pow`, which returns a `MathError` (`Complex`, `Indeterminate` or `Infinite`; see [math](standard-library/math.md)).
 
 ## Comparison Operators
 

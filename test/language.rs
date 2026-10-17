@@ -985,18 +985,18 @@ fn stdlib_math() {
             Ok(root) => print(root)
             Err(Complex) => print('no real square root')
             Err(Indeterminate) => print('indeterminate')
+            Err(Infinite) => print('infinite')
         }
-        print(math.sqrt(16), math.pow(-8, 0.5), math.pow(0, 0), math.pow(-2, 3))
+        print(math.sqrt(16), math.pow(-8, 0.5), math.pow(0, 0), math.pow(0, -1), math.pow(-2, 3))
         print(math.abs(-3), math.abs(-2.5), math.floor(2.7), math.ceil(2.1), math.round(2.5))
         print(math.e > 2.71)
     "#;
     assert_eq!(
         run(source),
-        "78.53981633974483\nno real square root\nOk(4.0) Err(Complex) Err(Indeterminate) Ok(-8.0)\n3 2.5 2 3 3\ntrue\n"
+        "78.53981633974483\nno real square root\nOk(4.0) Err(Complex) Err(Indeterminate) Err(Infinite) Ok(-8.0)\n3 2.5 2 3 3\ntrue\n"
     );
-    // Representation limits and division by zero panic.
-    assert_error("import math\nprint(math.pow(10, 400))", "panic");
-    assert_error("import math\nprint(math.pow(0, -1))", "division by zero");
+    // Representation limits panic: a larger type would fit the result, unlike Infinite.
+    assert_error("import math\nprint(math.pow(10, 400))", "float overflow");
     assert_error("import math\nprint(math.round(1e300))", "integer overflow");
 }
 
