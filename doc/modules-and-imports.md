@@ -7,14 +7,16 @@ Modules allow you to organize your code in separate files, and you can import an
 ```ez
 // file: math.ez
 
-function add(a: int, b: int): int {
+export function add(a: int, b: int): int {
 	return a + b
 }
 
-function subtract(a: int, b: int): int {
+export function subtract(a: int, b: int): int {
 	return a - b
 }
 ```
+
+Everything in a module is private by default. Only declarations marked with export (functions, constants, types and interfaces) can be imported by other modules. Exporting a sum type also exports its variants.
 
 ## Using Modules:
 
