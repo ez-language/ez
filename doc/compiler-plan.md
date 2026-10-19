@@ -141,9 +141,59 @@ function readConfig(path: string): Result[json.Json, ConfigError] {
 
 Implemented; see [Error Handling](error-handling.md).
 
-### Methods use `self`
+### Methods
 
-When methods on types are added, the value a method is called on is named `self` (not `this`).
+A method is a function prefixed with its type, with an explicit `self` parameter (not `this`):
+
+```ez
+type Person = {
+    name: string
+}
+
+function Person.greet(self) {
+    print(`Hello, I'm ${self.name}!`)
+}
+
+const person: Person = {
+    name: 'John'
+}
+
+person.greet()
+```
+
+Not implemented yet (phase 1).
+
+### Value semantics details
+
+-   **Closures capture a read-only copy** of the variables they use: assigning to a captured variable is a compile error. State that changes is kept another way (e.g. a type with methods).
+-   **`mut` marks a parameter the function may modify**, both in the declaration and in the call, so the change is visible where it happens:
+
+    ```ez
+    function addItem(mut list: int[], item: int) { ... }
+
+    addItem(mut items, 2)
+    ```
+
+    An `imut` variable can never be passed as `mut`.
+-   **Move-only types**, including user types: values that cannot be copied (resources). Assigning moves them, and using the previous variable is a compile error.
+-   **Only move-only types can have a `drop`** method, called automatically when the value is dropped. A copyable type with `drop` would run it once per copy.
+-   **Intentionally shared structures** (graphs, caches) use indices into a list ("arenas"). An explicit shared type may come later, only if arenas prove insufficient.
+
+Not implemented yet (phase 1).
+
+### Standard library: file modes and readable errors
+
+-   `file.open(path, mode)` takes a sum type, so an invalid mode does not compile:
+
+    ```ez
+    type Mode = { Read  Write  Append }
+
+    f = file.open('notes.txt', Read)?
+    ```
+
+-   `print(error)` (and string interpolation) shows a human-readable message for standard library errors, e.g. `file 'notes.txt' not found` instead of `NotFound('notes.txt')`. The same text is available as `error.message()`.
+
+Not implemented yet.
 
 ### Block scope
 
@@ -346,14 +396,11 @@ Notes:
 
 ## Open decisions
 
-1.  **Value semantics details** (see [Memory management](#memory-management-ownership-value-semantics-and-drop)):
-    -   **Closures**: capture a read-only copy of the variables they use (recommended: assigning to a captured variable is a compile error), or another rule. Patterns like a counter closure would keep their state another way.
-    -   **Functions that modify an argument**: parameters are borrowed read-only, so changing the caller's value needs an explicit marker, like `inout` in Swift and Hylo or `mut` in Mojo. The same applies to methods that modify `self`.
-    -   **Move-only types**: which types are move-only besides the standard library resources, and whether user types can declare it.
-    -   **Drop for user types**: a method named `drop`, called when the value is dropped (once methods exist).
-    -   **Intentionally shared structures** (graphs, caches): indices into a list (arenas) by default; an explicit shared type such as `Shared[T]` later, if needed.
-2.  **Standard library API changes**:
-    -   `file.open(path, mode)` with `type Mode = { Read  Write  Append }` instead of `'r'`, `'w'`, `'a'`. Reading a file opened for writing, or using a closed file, panics.
-    -   `regex.compile(pattern) -> Result[Regex, RegexError]`, with infallible methods on `Regex`.
-    -   A `.message()` method on every standard library error type, returning a human-readable text.
-3.  **Phase 1 syntax**: generic functions (`function first[T](items: T[]): Option[T]`?), method declarations (`function Person.greet()`?), the collections, text and system APIs, and FFI.
+1.  **Mutating methods**: a method that modifies its value declares `mut self` (`function Counter.increment(mut self)`); it can only be called on `var` and `const` variables. Recommended: the call does not repeat the marker (`counter.increment()`, `list.push(x)`), because the method is already called on the variable.
+2.  **Functions without `self`**: `function Person.create(name: string): Person`, called as `Person.create('John')` (associated functions), e.g. for constructors.
+3.  **Declaring a move-only type**: the syntax for user types (e.g. a marker on the `type` declaration).
+4.  **Readable display for user types**: whether `print` and interpolation use a `message(self): string` method of user types too (a naming convention, like `drop`), and a `repr(value)` function to get the structural form (`NotFound('notes.txt')`) when debugging.
+5.  **`regex.compile(pattern) -> Result[Regex, RegexError]`**, with infallible methods on `Regex`: depends on methods.
+6.  **Generics**: `function first[T](items: T[]): Option[T]` and `type Pair[A, B] = { ... }`; whether type parameters need constraints is still being considered.
+7.  **The `for` variable as `imut`**: each iteration already gets a new variable; making it `imut` turns an assignment to it (almost always a mistake) into a compile error. The same could apply to the variables bound by `match` patterns.
+8.  **Phase 1 APIs**: collections (`push`, `pop`, slicing, maps with any key type, sets), text (a character type, slicing, a string builder), system (command-line arguments, exit code, environment variables, processes) and FFI (`extern function`).
