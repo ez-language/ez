@@ -108,18 +108,18 @@ type Dog = Animal & {
 
 ## Subtyping
 
-`ez` does not support subtyping.
-
 ```ez
-function greet(animal: Animal) {
-    print(animal.name)
+type Person = {
+    name: string
 }
 
-const dog: Dog = {
-    name: 'Rex',
-    breed: 'Pug'
+function Person.greet(self) {
+    print(`Hello, I'm ${self.name}!`)
 }
 
-greet({ name: dog.name }) // Rex (extract the fields explicitly)
-greet(dog) // Error! Dog is not a subtype of Animal
+const person: Person = {
+    name: 'John'
+}
+
+person.greet() // Hello, I'm John!
 ```
