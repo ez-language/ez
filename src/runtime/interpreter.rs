@@ -123,7 +123,7 @@ impl Interpreter {
                 )))
             }
         };
-        let env = Env::child(&self.prelude);
+        let env = Env::module(&self.prelude);
         let name = path
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
@@ -407,7 +407,7 @@ impl Interpreter {
                 name: "anonymous function".to_string(),
                 params: params.clone(),
                 body: Rc::clone(body),
-                env: Rc::clone(env),
+                env: Env::snapshot(env),
                 float_params: params.iter().map(|p| is_float_type(&p.ty)).collect(),
                 returns_float: is_float_type(return_type),
                 file: Rc::clone(&self.file),
@@ -471,9 +471,32 @@ impl Interpreter {
                 env.define(name, coerce(value, is_float_type(ty)));
                 Ok(Value::Void)
             }
-            AstNode::FunctionDecl { .. } | AstNode::TypeDecl { .. } => {
+            // A function declared inside another function captures a copy of the variables
+            // around it where it is declared (it was hoisted with access to the whole block).
+            AstNode::FunctionDecl {
+                name,
+                params,
+                return_type,
+                body,
+            } => {
+                let captured = Env::snapshot(env);
+                if !Rc::ptr_eq(&captured, env) {
+                    env.define(
+                        name,
+                        Value::Function(Rc::new(Closure {
+                            name: name.clone(),
+                            params: params.clone(),
+                            body: Rc::clone(body),
+                            env: captured,
+                            float_params: params.iter().map(|p| is_float_type(&p.ty)).collect(),
+                            returns_float: is_float_type(return_type),
+                            file: Rc::clone(&self.file),
+                        })),
+                    );
+                }
                 Ok(Value::Void)
             }
+            AstNode::TypeDecl { .. } => Ok(Value::Void),
             // Imports run when the block is hoisted.
             AstNode::Import { .. } => Ok(Value::Void),
         }
@@ -519,10 +542,15 @@ impl Interpreter {
             }
         };
         if self.function_depth == 0 {
+            // The error itself, readable (`file 'a.txt' not found`), or `None`.
+            let shown = match &failure {
+                Value::Variant(variant) if variant.name == "Err" => variant.values[0].display(),
+                other => other.display(),
+            };
             return Err(Flow::Error(EzError::UnhandledError(format!(
                 "{}: {}",
                 self.location(),
-                failure.repr()
+                shown
             ))));
         }
         Err(Flow::Return(failure))
@@ -993,6 +1021,10 @@ impl Interpreter {
                 self.call_value(&member, args)
             }
             Value::Native(native) => stdlib::native_method(self, native, name, args),
+            Value::Variant(variant) if name == "message" => match stdlib::error_message(variant) {
+                Some(message) => Ok(Value::str(&message)),
+                None => Err(self.error(format!("'{}' has no method 'message'", variant.sum.name))),
+            },
             Value::Variant(variant) if variant.sum.name == "Result" && name == "mapErr" => {
                 if variant.name != "Err" {
                     return Ok(object.clone());

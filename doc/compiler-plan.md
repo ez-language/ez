@@ -130,7 +130,7 @@ type ConfigError = {
 }
 
 function readConfig(path: string): Result[json.Json, ConfigError] {
-    f = file.open(path, 'r')?       // FileError → File(...)
+    f = file.open(path, file.Read)? // FileError → File(...)
     text = f.read()?
 
     return Ok(json.parse(text)?)    // JsonError → Json(...)
@@ -165,7 +165,7 @@ Not implemented yet (phase 1).
 
 ### Value semantics details
 
--   **Closures capture a read-only copy** of the variables they use: assigning to a captured variable is a compile error. State that changes is kept another way (e.g. a type with methods).
+-   **Closures capture a read-only copy** of the variables they use: assigning to a captured variable (or changing its contents) is a compile error, and the closure sees the value from the moment it was created. Module variables are not captured: functions read and change them directly. State that changes is kept another way (e.g. a type with methods). Implemented.
 -   **`mut` marks a parameter the function may modify**, both in the declaration and in the call, so the change is visible where it happens:
 
     ```ez
@@ -179,7 +179,7 @@ Not implemented yet (phase 1).
 -   **Only move-only types can have a `drop`** method, called automatically when the value is dropped. A copyable type with `drop` would run it once per copy.
 -   **Intentionally shared structures** (graphs, caches) use indices into a list ("arenas"). An explicit shared type may come later, only if arenas prove insufficient.
 
-Not implemented yet (phase 1).
+The other items are not implemented yet (phase 1).
 
 ### Standard library: file modes and readable errors
 
@@ -193,7 +193,7 @@ Not implemented yet (phase 1).
 
 -   `print(error)` (and string interpolation) shows a human-readable message for standard library errors, e.g. `file 'notes.txt' not found` instead of `NotFound('notes.txt')`. The same text is available as `error.message()`.
 
-Not implemented yet.
+Both are implemented.
 
 ### Block scope
 
@@ -209,7 +209,7 @@ Memory is managed with **ownership**, without a garbage collector. Every value h
 
 ```ez
 function readNotes(): Result[string, file.FileError] {
-    f = file.open('notes.txt', 'r')?
+    f = file.open('notes.txt', file.Read)?
     content = f.read()?   // on an error, '?' returns and 'f' is closed
     return Ok(content)    // 'f' goes out of scope: the file is closed
 }

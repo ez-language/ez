@@ -802,6 +802,55 @@ fn anonymous_functions_and_closures() {
 
         print(double(10), triple(10)) // 20 30
 
+        function makeAdder(amount: int): (int) => int {
+            return (x: int) => x + amount
+        }
+        addFive = makeAdder(5)
+        print(addFive(1))
+
+        apply = (f: (int) => int, x: int) => f(x)
+        print(apply(double, 21))
+    "#;
+    assert_eq!(run(source), "20 30\n6\n42\n");
+}
+
+#[test]
+fn closures_capture_a_read_only_copy() {
+    // The captured value is the one at the moment the function is created.
+    let source = r#"
+        function make(): int[] {
+            results: int[] = []
+            x = 1
+            read = () => x
+            x = 2
+            results += [read()]
+
+            fns: (() => int)[] = []
+            for i in range(3) {
+                fns += [() => i * 10]
+            }
+            for f in fns {
+                results += [f()]
+            }
+
+            function inner(): int { return x }
+            x = 3
+            results += [inner()]
+            return results
+        }
+        print(make())
+
+        // Module variables are not captured: functions read and change them.
+        total = 0
+        function add(n: int) {
+            total += n
+        }
+        add(2)
+        add(3)
+        print(total)
+    "#;
+    assert_eq!(run(source), "[1, 0, 10, 20, 2]\n5\n");
+    let counter = r#"
         function makeCounter(): () => int {
             count = 0
             return () => {
@@ -809,14 +858,12 @@ fn anonymous_functions_and_closures() {
                 return count
             }
         }
-        counter = makeCounter()
-        counter()
-        print(counter())
-
-        apply = (f: (int) => int, x: int) => f(x)
-        print(apply(double, 21))
     "#;
-    assert_eq!(run(source), "20 30\n2\n42\n");
+    assert_error(counter, "cannot modify 'count' here: functions capture a read-only copy");
+    assert_error(
+        "function f() {\n items = [1]\n g = () => { items[0] = 2 }\n}",
+        "cannot modify 'items' here",
+    );
 }
 
 #[test]
@@ -883,6 +930,41 @@ fn question_mark_wraps_errors_automatically() {
 }
 
 #[test]
+fn readable_error_messages() {
+    let source = r#"
+        import file
+        import json
+        import math
+
+        match (file.open('/nonexistent/notes.txt', file.Read)) {
+            Ok(_) => print('opened?')
+            Err(error) => {
+                print(error)
+                print(`failed: ${error}`, error.message().length() > 0)
+            }
+        }
+        match (int('abc')) {
+            Ok(_) => print('?')
+            Err(error) => print(error)
+        }
+        match (json.parse('[1,')) {
+            Ok(_) => print('?')
+            Err(error) => print(error)
+        }
+        match (math.sqrt(-1)) {
+            Ok(_) => print('?')
+            Err(error) => print(error.message())
+        }
+        print(int('abc')) // a Result keeps its structural form
+    "#;
+    assert_eq!(
+        run(source),
+        "file '/nonexistent/notes.txt' not found\nfailed: file '/nonexistent/notes.txt' not found true\n'abc' is not a valid number\ninvalid JSON at line 1, column 4: unexpected end of input\nthe result is not a real number (it is complex)\nErr(InvalidNumber('abc'))\n"
+    );
+    assert_error("type E = { Bad }\nprint(Bad.message())", "has no method 'message'");
+}
+
+#[test]
 fn map_err() {
     let source = r#"
         function parse(text: string): Result[int, string] {
@@ -907,7 +989,7 @@ fn question_mark_rules() {
     // At the top level of the main file, an error stops the program.
     let (output, result) = execute("print(int('1')?)\nn = int('oops')?\nprint('never')", "", Path::new("test.ez"));
     assert_eq!(output, "1\n");
-    assert_eq!(result.unwrap_err().to_string(), "error: test.ez:2: Err(InvalidNumber('oops'))");
+    assert_eq!(result.unwrap_err().to_string(), "error: test.ez:2: 'oops' is not a valid number");
 }
 
 #[test]
@@ -1041,7 +1123,7 @@ fn stdlib_file() {
         r#"
         import file
 
-        match (file.open('{path}', 'w')) {{
+        match (file.open('{path}', file.Write)) {{
             Ok(f) => {{
                 print(f.write('Hello world!'))
                 f.close()
@@ -1049,7 +1131,7 @@ fn stdlib_file() {
             Err(error) => print(error)
         }}
 
-        match (file.open('{path}', 'r')) {{
+        match (file.open('{path}', file.Read)) {{
             Ok(f) => {{
                 match (f.read()) {{
                     Ok(content) => print(content)
@@ -1060,18 +1142,28 @@ fn stdlib_file() {
             Err(error) => print(error)
         }}
 
-        match (file.open('/nonexistent/notes.txt', 'r')) {{
+        match (file.open('/nonexistent/notes.txt', file.Read)) {{
             Ok(_) => print('opened?')
             Err(NotFound(missing)) => print(`not found: ${{missing}}`)
+            Err(error) => print(error)
+        }}
+
+        import {{ Mode }} from 'file'
+        match (file.open('{path}', Append)) {{
+            Ok(f) => f.write(' Bye!')
+            Err(error) => Err(error)
+        }}
+        match (file.open('{path}', Read)) {{
+            Ok(f) => print(f.read())
             Err(error) => print(error)
         }}
         "#
     );
     assert_eq!(
         run(&source),
-        "Ok(void)\nHello world!\nnot found: /nonexistent/notes.txt\n"
+        "Ok(void)\nHello world!\nnot found: /nonexistent/notes.txt\nOk('Hello world! Bye!')\n"
     );
-    assert_error("import file\nf = file.open('x', 'q')", "invalid file mode");
+    assert_error("import file\nf = file.open('x', 'r')", "must be Mode, found string");
 }
 
 #[test]

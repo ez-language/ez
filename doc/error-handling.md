@@ -19,6 +19,17 @@ match (int('42')) {
 }
 ```
 
+Standard library errors have a readable message: printing or interpolating them shows it, and `error.message()` returns it. A `Result` itself keeps its structural form:
+
+```ez
+match (int('abc')) {
+	Ok(value) => print(value)
+	Err(error) => print(error) // 'abc' is not a valid number
+}
+
+print(int('abc')) // Err(InvalidNumber('abc'))
+```
+
 ## The `?` Operator
 
 `?` propagates an error instead of handling it with `match`:
@@ -39,10 +50,10 @@ print(parseAge('x'))  // Err(InvalidNumber('x'))
 
 The function must declare its return type, and it must be a `Result` (for `?` on a `Result`) or an `Option` (for `?` on an `Option`).
 
-At the top level of the main file, an `Err` or a `None` stops the program, prints it and exits with code 1:
+At the top level of the main file, an `Err` or a `None` stops the program, prints the error and exits with code 1:
 
 ```ez
-n = int('oops')? // error: main.ez:1: Err(InvalidNumber('oops'))
+n = int('oops')? // error: main.ez:1: 'oops' is not a valid number
 ```
 
 ### Combining Errors of Different Types
@@ -59,7 +70,7 @@ type ConfigError = {
 }
 
 function readConfig(path: string): Result[json.Json, ConfigError] {
-	f = file.open(path, 'r')?   // a FileError becomes File(...)
+	f = file.open(path, file.Read)?   // a FileError becomes File(...)
 	text = f.read()?            // a FileError becomes File(...)
 	f.close()
 

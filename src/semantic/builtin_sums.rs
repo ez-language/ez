@@ -43,6 +43,12 @@ pub const BUILTIN_SUMS: &[BuiltinSum] = &[
         variants: &[("Complex", &[]), ("Indeterminate", &[]), ("Infinite", &[])],
     },
     BuiltinSum {
+        name: "Mode",
+        module: Some("file"),
+        params: 0,
+        variants: &[("Read", &[]), ("Write", &[]), ("Append", &[])],
+    },
+    BuiltinSum {
         name: "FileError",
         module: Some("file"),
         params: 0,

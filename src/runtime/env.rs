@@ -12,6 +12,8 @@ pub struct Env {
     /// importer sees the current value of an exported `var`.
     aliases: RefCell<HashMap<String, Rc<Env>>>,
     parent: Option<Rc<Env>>,
+    /// The top-level scope of a module (its variables are not captured by functions).
+    is_module: bool,
 }
 
 impl Env {
@@ -20,6 +22,49 @@ impl Env {
             vars: RefCell::new(HashMap::new()),
             aliases: RefCell::new(HashMap::new()),
             parent,
+            is_module: false,
+        })
+    }
+
+    /// The top-level scope of a module.
+    pub fn module(prelude: &Rc<Env>) -> Rc<Env> {
+        Rc::new(Env {
+            vars: RefCell::new(HashMap::new()),
+            aliases: RefCell::new(HashMap::new()),
+            parent: Some(Rc::clone(prelude)),
+            is_module: true,
+        })
+    }
+
+    /// Scope for a function created here: a copy of the variables of the functions and blocks
+    /// around it, up to the module scope (functions capture a read-only copy).
+    pub fn snapshot(env: &Rc<Env>) -> Rc<Env> {
+        if env.is_module {
+            return Rc::clone(env);
+        }
+        let mut vars: HashMap<String, Value> = HashMap::new();
+        let mut aliases: HashMap<String, Rc<Env>> = HashMap::new();
+        let mut current = Rc::clone(env);
+        while !current.is_module {
+            for (name, value) in current.vars.borrow().iter() {
+                vars.entry(name.clone()).or_insert_with(|| value.clone());
+            }
+            for (name, module) in current.aliases.borrow().iter() {
+                aliases.entry(name.clone()).or_insert_with(|| Rc::clone(module));
+            }
+            match &current.parent {
+                Some(parent) => current = Rc::clone(parent),
+                None => break,
+            }
+        }
+        if !current.is_module {
+            return Rc::clone(env);
+        }
+        Rc::new(Env {
+            vars: RefCell::new(vars),
+            aliases: RefCell::new(aliases),
+            parent: Some(current),
+            is_module: false,
         })
     }
 

@@ -341,15 +341,20 @@ impl Parser {
 
     fn parse_type(&mut self) -> Result<TypeExpr, EzError> {
         let mut ty = if *self.current() == Token::LParen {
-            // Function type: `(int, string) => boolean`
+            // Function type `(int, string) => boolean`, or a type in parentheses
+            // (`(() => int)[]`, a list of functions).
             self.advance();
-            let params = self.parse_comma_separated(&Token::RParen, |p| p.parse_type())?;
+            let mut params = self.parse_comma_separated(&Token::RParen, |p| p.parse_type())?;
             self.expect(Token::RParen, "')' in function type")?;
-            self.expect(Token::FatArrow, "'=>' in function type")?;
-            let ret = self.parse_type()?;
-            TypeExpr::Function {
-                params,
-                ret: Box::new(ret),
+            if *self.current() != Token::FatArrow && params.len() == 1 {
+                params.remove(0)
+            } else {
+                self.expect(Token::FatArrow, "'=>' in function type")?;
+                let ret = self.parse_type()?;
+                TypeExpr::Function {
+                    params,
+                    ret: Box::new(ret),
+                }
             }
         } else {
             let mut name = self.expect_identifier("type name")?;

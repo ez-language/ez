@@ -236,10 +236,13 @@ impl Value {
         }
     }
 
-    /// Text shown by `print` and string interpolation.
+    /// Text shown by `print` and string interpolation. Standard library errors show a
+    /// human-readable message.
     pub fn display(&self) -> String {
         match self {
             Value::Str(s) => s.to_string(),
+            Value::Variant(variant) => crate::runtime::stdlib::error_message(variant)
+                .unwrap_or_else(|| self.repr()),
             other => other.repr(),
         }
     }

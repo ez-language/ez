@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::runtime::interpreter::{as_float, some, Exec, Interpreter};
-use crate::runtime::value::{DateTime, FileHandle, Native, SumType, Value};
+use crate::runtime::value::{DateTime, FileHandle, Native, SumType, Value, VariantValue};
 use crate::semantic::builtin_sums::{builtin_sum, stdlib_functions, BUILTIN_SUMS};
 
 thread_local! {
@@ -265,18 +265,16 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
 
         "file.open" => {
             let path = str_arg(interpreter, &args, 0)?.to_string();
-            let mode = str_arg(interpreter, &args, 1)?.to_string();
+            // `Read`, `Write` or `Append` (the `file.Mode` sum type).
+            let mode = match args.get(1) {
+                Some(Value::Variant(mode)) => mode.name.clone(),
+                _ => return Err(interpreter.error("the mode must be file.Read, file.Write or file.Append")),
+            };
             let mut options = std::fs::OpenOptions::new();
             match mode.as_str() {
-                "r" => options.read(true),
-                "w" => options.write(true).create(true).truncate(true),
-                "a" => options.append(true).create(true),
-                other => {
-                    return Err(interpreter.error(format!(
-                        "invalid file mode '{}' (use 'r', 'w' or 'a')",
-                        other
-                    )))
-                }
+                "Read" => options.read(true),
+                "Write" => options.write(true).create(true).truncate(true),
+                _ => options.append(true).create(true),
             };
             match options.open(&path) {
                 Ok(file) => Ok(ok(Value::Native(Rc::new(RefCell::new(Native::File(FileHandle {
@@ -427,6 +425,46 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
     }
 }
 
+/// Standard library error types whose values have a human-readable message.
+pub const ERROR_TYPES: &[&str] = &["ParseError", "MathError", "FileError", "HttpError", "JsonError", "DateError"];
+
+/// Human-readable text of a standard library error (`NotFound('a.txt')` → `file 'a.txt' not
+/// found`), used by `print`, interpolation and `.message()`.
+pub fn error_message(error: &VariantValue) -> Option<String> {
+    if !ERROR_TYPES.contains(&error.sum.name.as_str()) {
+        return None;
+    }
+    let text = |i: usize| error.values.get(i).map(Value::display).unwrap_or_default();
+    let message = match error.name.as_str() {
+        "InvalidNumber" => format!("'{}' is not a valid number", text(0)),
+        "OutOfRange" => format!("'{}' is out of range", text(0)),
+        "Complex" => "the result is not a real number (it is complex)".to_string(),
+        "Indeterminate" => "the result is indeterminate".to_string(),
+        "Infinite" => "the result is infinite".to_string(),
+        "NotFound" => format!("file '{}' not found", text(0)),
+        "PermissionDenied" => format!("permission denied for '{}'", text(0)),
+        "IsDirectory" => format!("'{}' is a directory", text(0)),
+        "InvalidUtf8" => format!("file '{}' is not valid UTF-8 text", text(0)),
+        "Io" => format!("cannot access '{}': {}", text(0), text(1)),
+        "InvalidUrl" => format!("invalid URL '{}'", text(0)),
+        "ConnectionFailed" => format!("cannot connect to '{}': {}", text(0), text(1)),
+        "Timeout" => format!("the request to '{}' timed out", text(0)),
+        "Tls" => format!("secure connection to '{}' failed: {}", text(0), text(1)),
+        "InvalidResponse" => format!("invalid response from '{}': {}", text(0), text(1)),
+        "Syntax" => format!("invalid JSON at line {}, column {}: {}", text(1), text(2), text(0)),
+        "NumberOutOfRange" => format!(
+            "the number {} at line {}, column {} is too large",
+            text(0),
+            text(1),
+            text(2)
+        ),
+        "PatternMismatch" => format!("'{}' does not match the pattern '{}'", text(0), text(1)),
+        "InvalidDate" => format!("'{}' is not a valid date", text(0)),
+        _ => return None,
+    };
+    Some(message)
+}
+
 /// The payload of a `Json` value if it is the variant `name` (`String('a')` → `'a'`).
 fn json_payload(value: &Value, name: &str) -> Option<Value> {
     match value {
@@ -541,8 +579,8 @@ pub fn native_method(
     };
     match name {
         "read" => {
-            if mode != "r" {
-                return Err(interpreter.error(format!("file '{}' was not opened for reading ('r')", path)));
+            if mode != "Read" {
+                return Err(interpreter.error(format!("file '{}' was not opened for reading (Read)", path)));
             }
             let mut content = String::new();
             Ok(match file.read_to_string(&mut content) {
@@ -551,9 +589,9 @@ pub fn native_method(
             })
         }
         "write" => {
-            if mode == "r" {
+            if mode == "Read" {
                 return Err(interpreter.error(format!(
-                    "file '{}' was opened for reading; use 'w' or 'a' to write",
+                    "file '{}' was opened for reading; use Write or Append to write",
                     path
                 )));
             }

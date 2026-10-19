@@ -4,24 +4,26 @@ The `file` module provides functionality for working with files.
 
 ## Functions
 
--   `open(path: string, mode: string) -> Result[File, FileError]`  
-    Opens the file at `path` in the specified `mode`.
+-   `open(path: string, mode: Mode) -> Result[File, FileError]`  
+    Opens the file at `path` in the specified `mode`:
 
-    Modes:
+    ```ez
+    type Mode = {
+        Read      // read
+        Write     // write (overwrites existing content)
+        Append    // write at the end
+    }
+    ```
 
-    -   `'r'`: read
-    -   `'w'`: write (overwrites existing content)
-    -   `'a'`: append
-
-    An invalid mode is a bug: it panics.
+    With `import file`, the modes are `file.Read`, `file.Write` and `file.Append`. With `import { Mode } from 'file'`, they can be written `Read`, `Write` and `Append`. Since the mode is a sum type, an invalid mode does not compile.
 
 ## File Object Methods
 
 -   `read() -> Result[string, FileError]`  
-    Reads the entire contents of the file. The file must have been opened with `'r'`.
+    Reads the entire contents of the file. The file must have been opened with `Read`.
 
 -   `write(text: string) -> Result[void, FileError]`  
-    Writes `text` to the file. The file must have been opened with `'w'` or `'a'`.
+    Writes `text` to the file. The file must have been opened with `Write` or `Append`.
 
 -   `close() -> void`  
     Closes the file.
@@ -40,12 +42,21 @@ type FileError = {
 }
 ```
 
+Printing an error shows a readable message, also available as `error.message()`:
+
+```ez
+match (file.open('missing.txt', file.Read)) {
+    Ok(f) => print(f.read())
+    Err(error) => print(error) // file 'missing.txt' not found
+}
+```
+
 ## Example
 
 ```ez
 import file
 
-match (file.open('notes.txt', 'w')) {
+match (file.open('notes.txt', file.Write)) {
     Ok(f) => {
         f.write('Hello world!')
         f.close()
@@ -53,7 +64,7 @@ match (file.open('notes.txt', 'w')) {
     Err(error) => print(error)
 }
 
-match (file.open('notes.txt', 'r')) {
+match (file.open('notes.txt', file.Read)) {
     Ok(f) => {
         match (f.read()) {
             Ok(content) => print(content)
@@ -73,7 +84,7 @@ With the `?` operator (see [Error Handling](../error-handling.md)), inside a fun
 import file
 
 function readNotes(): Result[string, file.FileError] {
-    f = file.open('notes.txt', 'r')?
+    f = file.open('notes.txt', file.Read)?
     content = f.read()?
     f.close()
 

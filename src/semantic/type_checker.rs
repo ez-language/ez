@@ -116,6 +116,7 @@ pub struct BuiltinTypes {
     pub parse_error: TypeId,
     pub math_error: TypeId,
     pub file_error: TypeId,
+    pub file_mode: TypeId,
     pub http_error: TypeId,
     pub json: TypeId,
     pub json_object: TypeId,
@@ -133,6 +134,8 @@ struct ModuleState {
     /// Whether this is the main file (where `?` may be used at the top level).
     is_entry: bool,
     scopes: Vec<Scope>,
+    /// Index in `scopes` of the parameter scope of each function being checked.
+    function_scopes: Vec<usize>,
     returns: Vec<ReturnContext>,
     file: String,
     dir: PathBuf,
@@ -279,6 +282,7 @@ impl Checker {
                 parse_error: ids["ParseError"],
                 math_error: ids["MathError"],
                 file_error: ids["FileError"],
+                file_mode: ids["Mode"],
                 http_error: ids["HttpError"],
                 json,
                 json_object,
@@ -307,6 +311,7 @@ impl Checker {
             "ParseError" => b.parse_error,
             "MathError" => b.math_error,
             "FileError" => b.file_error,
+            "Mode" => b.file_mode,
             "HttpError" => b.http_error,
             "Json" => b.json,
             "JsonError" => b.json_error,
@@ -422,6 +427,7 @@ impl Checker {
             ModuleState {
                 is_entry: self.loading.len() == 1,
                 scopes: vec![prelude, Scope::default()],
+                function_scopes: Vec::new(),
                 returns: Vec::new(),
                 file: display.to_string(),
                 dir,
@@ -596,6 +602,28 @@ impl Checker {
             .iter()
             .rev()
             .find_map(|scope| scope.vars.get(name))
+    }
+
+    /// A function captures a read-only copy of the variables of the functions around it: they
+    /// cannot be assigned (module variables are not captured, they belong to the module).
+    fn ensure_not_captured(&self, name: &str) -> CheckResult<()> {
+        let boundary = match self.state.function_scopes.last() {
+            Some(boundary) => *boundary,
+            None => return Ok(()),
+        };
+        let index = self
+            .state
+            .scopes
+            .iter()
+            .rposition(|scope| scope.vars.contains_key(name));
+        match index {
+            // 0 is the prelude and 1 the module scope.
+            Some(index) if index > 1 && index < boundary => self.err(format!(
+                "cannot modify '{}' here: functions capture a read-only copy of the variables around them",
+                name
+            )),
+            _ => Ok(()),
+        }
     }
 
     fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol> {
@@ -1216,6 +1244,7 @@ impl Checker {
                 if let Some(owner) = &symbol.owner {
                     return self.err(format!("'{}' is read-only outside '{}'", name, owner));
                 }
+                self.ensure_not_captured(name)?;
                 if !matches!(symbol.kind, SymbolKind::Value) || matches!(symbol.ty, Type::Module(_)) {
                     return self.err(format!("cannot assign to '{}'", name));
                 }
@@ -1317,7 +1346,7 @@ impl Checker {
                         Some(symbol) if symbol.is_imut && matches!(symbol.kind, SymbolKind::Value) => {
                             self.err(format!("cannot modify '{}': it is imut", name))
                         }
-                        _ => Ok(()),
+                        _ => self.ensure_not_captured(name),
                     };
                 }
                 _ => return Ok(()),
@@ -1487,6 +1516,7 @@ impl Checker {
         };
 
         self.push_scope();
+        self.state.function_scopes.push(self.state.scopes.len() - 1);
         for (param, ty) in params.iter().zip(&param_types) {
             self.declare(&param.name, Symbol::value(ty.clone(), false))?;
         }
@@ -1501,6 +1531,7 @@ impl Checker {
             expression => self.check_value(expression, value_expected),
         };
         let context = self.state.returns.pop();
+        self.state.function_scopes.pop();
         self.pop_scope();
         let body_ty = body_result?;
 
@@ -2408,7 +2439,7 @@ impl Checker {
             }
 
             "file.open" => {
-                check(self, &[s.clone(), s])?;
+                check(self, &[s, Self::named(b.file_mode)])?;
                 Ok(result_with(Self::named(b.file), b.file_error))
             }
 
@@ -2526,6 +2557,22 @@ impl Checker {
             };
         }
 
+        // `error.message()` on standard library errors: a human-readable text.
+        if let Type::Named { id, .. } | Type::Variant { id, .. } = object_ty {
+            let b = self.builtins;
+            let error_types = [
+                b.parse_error,
+                b.math_error,
+                b.file_error,
+                b.http_error,
+                b.json_error,
+                b.date_error,
+            ];
+            if name == "message" && error_types.contains(id) {
+                self.check_args(&[], args)?;
+                return Ok(Type::String);
+            }
+        }
         // `result.mapErr(f)`: converts the error with `f` (a function or a variant constructor).
         if let Type::Named { id, args: type_args } = object_ty {
             if *id == self.builtins.result && name == "mapErr" {
