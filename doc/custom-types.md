@@ -31,10 +31,10 @@ type User = {
 }
 
 user: User = {
-    id: 42
-    name: 'Bob'
+    id: 42,
+    name: 'Bob',
     address: {
-        street: '123 Main St'
+        street: '123 Main St',
         city: 'Exampleville'
     }
 }
@@ -111,6 +111,7 @@ type Dog = Animal & {
 ```ez
 type Person = {
     name: string
+    age: int
 }
 
 function Person.greet(self) {
@@ -118,8 +119,27 @@ function Person.greet(self) {
 }
 
 const person: Person = {
-    name: 'John'
+    name: 'John',
+    age: 20
 }
 
 person.greet() // Hello, I'm John!
+```
+
+```ez
+type Rect = {
+    width: int
+    height: int
+}
+
+function Rect.area(self): float {
+    return self.width * self.height
+}
+
+const rect: Rect = {
+    width: 3,
+    height: 4
+}
+
+print(rect.area()) // 12
 ```
