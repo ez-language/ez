@@ -1416,3 +1416,156 @@ fn all_examples_type_check() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Methods, associated functions and `mut` parameters
+// ---------------------------------------------------------------------------
+
+#[test]
+fn methods_and_associated_functions() {
+    let source = r#"
+        type Person = {
+            name: string
+            age: int
+        }
+
+        function Person.create(name: string): Person {
+            return { name: name, age: 0 }
+        }
+
+        function Person.greet(self) {
+            print(`Hello, I'm ${self.name}!`)
+        }
+
+        function Person.olderThan(self, other: Person): boolean {
+            return self.age > other.age
+        }
+
+        type Shape = {
+            Circle(radius: float)
+            Square(side: float)
+        }
+
+        function Shape.area(self): float {
+            return match (self) {
+                Circle(r) => 3.0 * r * r
+                Square(s) => s * s
+            }
+        }
+
+        const person: Person = { name: 'John', age: 20 }
+        person.greet()
+        const baby = Person.create('Ana')
+        baby.greet()
+        print(person.olderThan(baby), Square(2.0).area())
+    "#;
+    assert_eq!(run(source), "Hello, I'm John!\nHello, I'm Ana!\ntrue 4.0\n");
+
+    let p = "type P = { name: string }\n";
+    assert_error(&format!("{}function P.hi(self) {{ self.name = 'a' }}", p), "parameters can only be modified when declared 'mut'");
+    assert_error(&format!("{}function P.hi(mut self) {{}}", p), "'mut self' is not available yet");
+    assert_error(&format!("{}function P.hi(self: P) {{}}", p), "'self' has no type annotation");
+    assert_error(&format!("{}function P.name(self) {{}}", p), "same name as a field");
+    assert_error(&format!("{}function Q.hi(self) {{}}", p), "cannot declare 'Q.hi'");
+    assert_error(&format!("{}export function P.hi(self) {{}}", p), "does not take 'export'");
+    assert_error(&format!("{}function f() {{ function P.hi(self) {{}} }}", p), "must be declared at the top level");
+    assert_error(&format!("{}function P.hi(self) {{}}\nP.hi()", p), "takes 'self'");
+    assert_error(
+        &format!("{}function P.make(): P {{ return {{ name: 'a' }} }}\nconst x: P = {{ name: 'b' }}\nx.make()", p),
+        "has no 'self'",
+    );
+}
+
+#[test]
+fn methods_of_imported_types() {
+    let dir = temp_dir("methods");
+    std::fs::write(
+        dir.join("geo.ez"),
+        r#"
+        export type Point = {
+            x: int
+            y: int
+        }
+
+        function Point.origin(): Point {
+            return { x: 0, y: 0 }
+        }
+
+        function Point.sum(self): int {
+            return self.x + self.y
+        }
+
+        export function make(x: int, y: int): Point {
+            return { x: x, y: y }
+        }
+
+        export function double(mut n: int) {
+            n = n * 2
+        }
+        "#,
+    )
+    .unwrap();
+    let source = r#"
+        import geo from 'geo.ez'
+        import { Point, make, double } from 'geo.ez'
+
+        print(geo.Point.origin().sum(), Point.origin().sum(), make(2, 3).sum())
+        var n = 3
+        geo.double(mut n)
+        double(mut n)
+        print(n)
+    "#;
+    let (output, result) = execute(source, "", &dir.join("main.ez"));
+    result.unwrap();
+    assert_eq!(output, "0 0 5\n12\n");
+}
+
+#[test]
+fn mut_parameters() {
+    let source = r#"
+        type Person = {
+            name: string
+            age: int
+        }
+
+        function reset(mut n: int) {
+            n = 0
+        }
+
+        function replace(mut items: int[]) {
+            items = [9, 9]
+        }
+
+        function birthday(mut p: Person) {
+            p.age += 1
+        }
+
+        var count = 5
+        reset(mut count)
+        var list = [1, 2]
+        replace(mut list)
+        var people: Person[] = [{ name: 'Ana', age: 30 }]
+        birthday(mut people[0])
+        var data = { inner: 3 }
+        reset(mut data.inner)
+        print(count, list, people[0].age, data.inner)
+    "#;
+    assert_eq!(run(source), "0 [9, 9] 31 0\n");
+
+    let f = "function f(mut x: int) {}\n";
+    assert_error("function f(x: int) { x = 1 }", "cannot modify 'x': parameters can only be modified when declared 'mut'");
+    assert_error("function f(items: int[]) { items[0] = 1 }", "parameters can only be modified");
+    assert_error(&format!("{}const c = 1\nf(mut c)", f), "cannot pass 'c' as 'mut': it is const");
+    assert_error(&format!("{}imut c = [1]\nf(mut c[0])", f), "it is imut");
+    assert_error(&format!("{}var c = 1\nf(c)", f), "argument 1 is a 'mut' parameter");
+    assert_error("function f(x: int) {}\nvar c = 1\nf(mut c)", "argument 1 is not a 'mut' parameter");
+    assert_error("function f(mut x: float) {}\nvar c = 1\nf(mut c)", "must be exactly float, found int");
+    assert_error(&format!("{}const g = f", f), "can only be called, not used as a value");
+    assert_error("const g = (mut x: int) => x", "anonymous functions cannot have 'mut' parameters");
+    assert_error(&format!("{}f(mut 1 + 2)", f), "only a variable, a field or an element");
+    assert_error("var x = 1\nprint(mut x)", "'mut' is only used before a call argument");
+    assert_error(
+        &format!("{}function outer() {{\nvar b = 1\nfunction inner() {{ f(mut b) }}\n}}", f),
+        "functions capture a read-only copy",
+    );
+}

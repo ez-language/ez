@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::error::EzError;
 use crate::parser::ast::{
-    AssignOperator, AstNode, BinaryOperator, Field, ImportKind, MatchArm, Param, Pattern,
+    AssignOperator, AstNode, BinaryOperator, Field, ImportKind, MatchArm, MethodRef, Param, Pattern,
     TemplatePart, TryWrap, TypeDef, TypeExpr, UnaryOperator,
 };
 use crate::parser::parse_source;
@@ -53,6 +53,10 @@ struct Symbol {
     kind: SymbolKind,
     /// Module that declared the symbol, when it was imported: it is read-only here.
     owner: Option<String>,
+    /// For functions: which parameters are `mut` (empty when none is).
+    mut_params: Vec<bool>,
+    /// A function parameter (read-only unless it is `mut`).
+    is_param: bool,
 }
 
 impl Symbol {
@@ -63,6 +67,8 @@ impl Symbol {
             is_imut: false,
             kind: SymbolKind::Value,
             owner: None,
+            mut_params: Vec::new(),
+            is_param: false,
         }
     }
 
@@ -73,6 +79,8 @@ impl Symbol {
             is_imut: true,
             kind: SymbolKind::Builtin(name.to_string()),
             owner: None,
+            mut_params: Vec::new(),
+            is_param: false,
         }
     }
 }
@@ -100,6 +108,17 @@ struct ModuleType {
     types: HashMap<String, TypeRef>,
     /// Names declared in the module but not exported.
     private: HashSet<String>,
+}
+
+/// A method (`function Person.greet(self)`) or an associated function (`function
+/// Person.create(name: string)`).
+#[derive(Debug, Clone)]
+struct MethodInfo {
+    /// Full signature; for a method, the first parameter is `self`.
+    ty: Type,
+    has_self: bool,
+    mut_params: Vec<bool>,
+    module: PathBuf,
 }
 
 struct ReturnContext {
@@ -138,6 +157,8 @@ struct ModuleState {
     function_scopes: Vec<usize>,
     returns: Vec<ReturnContext>,
     file: String,
+    /// Path of the module being checked (identifies its methods at runtime).
+    path: PathBuf,
     dir: PathBuf,
     line: usize,
 }
@@ -150,6 +171,8 @@ pub struct Checker {
     stdlib: HashMap<String, ModuleId>,
     loading: Vec<PathBuf>,
     asts: HashMap<PathBuf, Rc<Vec<AstNode>>>,
+    /// Methods and associated functions of each type, by type and name.
+    methods: HashMap<(TypeId, String), MethodInfo>,
     state: ModuleState,
 }
 
@@ -298,6 +321,7 @@ impl Checker {
             stdlib: HashMap::new(),
             loading: Vec::new(),
             asts: HashMap::new(),
+            methods: HashMap::new(),
             state: ModuleState::default(),
         }
     }
@@ -378,6 +402,8 @@ impl Checker {
                             variant: variant.name.clone(),
                         },
                         owner: None,
+                        mut_params: Vec::new(),
+                        is_param: false,
                     },
                 );
             }
@@ -430,6 +456,7 @@ impl Checker {
                 function_scopes: Vec::new(),
                 returns: Vec::new(),
                 file: display.to_string(),
+                path: path.to_path_buf(),
                 dir,
                 line: 0,
             },
@@ -891,15 +918,121 @@ impl Checker {
             self.set_line(statement);
             if let AstNode::FunctionDecl {
                 name,
+                owner,
                 params,
                 return_type,
                 ..
             } = statement.unlocated()
             {
+                if let Some(owner) = owner {
+                    self.declare_method(statements, statement, owner, name, params, return_type.as_ref())?;
+                    continue;
+                }
                 let ty = self.function_signature(name, params, return_type.as_ref(), true)?;
-                self.declare(name, Symbol::value(ty, true))?;
+                let mut symbol = Symbol::value(ty, true);
+                if params.iter().any(|p| p.is_mut) {
+                    symbol.mut_params = params.iter().map(|p| p.is_mut).collect();
+                }
+                self.declare(name, symbol)?;
             }
         }
+        Ok(())
+    }
+
+    /// `function Person.greet(self)` or `function Person.create(name: string)`: only at the top
+    /// level of the file that declares `Person`.
+    fn declare_method(
+        &mut self,
+        statements: &[AstNode],
+        statement: &AstNode,
+        owner: &str,
+        name: &str,
+        params: &[Param],
+        return_type: Option<&TypeExpr>,
+    ) -> CheckResult<()> {
+        let full = format!("{}.{}", owner, name);
+        if self.state.scopes.len() != 2 || !self.state.function_scopes.is_empty() {
+            return self.err(format!(
+                "'{}' must be declared at the top level of the file that declares '{}'",
+                full, owner
+            ));
+        }
+        if statement.is_exported() {
+            return self.err(format!(
+                "'{}' does not take 'export': methods are available wherever their type is",
+                full
+            ));
+        }
+        let declared_here = statements.iter().any(|s| {
+            matches!(
+                s.unlocated(),
+                AstNode::TypeDecl { name, definition } if name == owner && !matches!(definition, TypeDef::Alias(_))
+            )
+        });
+        let id = match self.current_scope().types.get(owner) {
+            Some(TypeRef::Type(Type::Named { id, .. })) if declared_here => *id,
+            _ => {
+                return self.err(format!(
+                    "cannot declare '{}': methods belong to a type with fields or variants declared in the same file",
+                    full
+                ))
+            }
+        };
+        if self.methods.contains_key(&(id, name.to_string())) {
+            return self.err(format!("'{}' is already declared", full));
+        }
+        let is_field = self
+            .table
+            .fields_of(&Self::named(id))
+            .is_some_and(|fields| fields.iter().any(|(n, _)| n == name));
+        let is_dict_length = name == "length" && matches!(self.table.get(id).kind, TypeKind::Dict { .. });
+        if is_field || is_dict_length {
+            return self.err(format!(
+                "'{}' has the same name as a {} of '{}'",
+                full,
+                if is_field { "field" } else { "built-in method" },
+                owner
+            ));
+        }
+
+        let has_self = params.first().is_some_and(|p| p.name == "self");
+        for (i, param) in params.iter().enumerate() {
+            if param.name != "self" {
+                continue;
+            }
+            if i > 0 {
+                return self.err(format!("in '{}', 'self' must be the first parameter", full));
+            }
+            if param.is_mut {
+                return self.err(format!(
+                    "'mut self' is not available yet: '{}' cannot modify the value it is called on",
+                    full
+                ));
+            }
+            if param.ty.is_some() {
+                return self.err(format!(
+                    "'self' has no type annotation: in '{}' it is always '{}'",
+                    full, owner
+                ));
+            }
+        }
+        let rest = if has_self { &params[1..] } else { params };
+        let ty = match self.function_signature(&full, rest, return_type, true)? {
+            Type::Function { mut params, ret } => {
+                if has_self {
+                    params.insert(0, Self::named(id));
+                }
+                Type::Function { params, ret }
+            }
+            other => other,
+        };
+        let info = MethodInfo {
+            ty,
+            has_self,
+            mut_params: params.iter().map(|p| p.is_mut).collect(),
+            module: self.state.path.clone(),
+        };
+        self.methods.insert((id, name.to_string()), info);
         Ok(())
     }
 
@@ -1103,9 +1236,30 @@ impl Checker {
             }
             AstNode::FunctionDecl {
                 name,
+                owner: Some(owner),
+                params,
+                body,
+                ..
+            } => {
+                let full = format!("{}.{}", owner, name);
+                let signature = match self.lookup_type(owner) {
+                    Some(TypeRef::Type(Type::Named { id, .. })) => {
+                        self.methods.get(&(*id, name.clone())).map(|m| m.ty.clone())
+                    }
+                    _ => None,
+                };
+                match signature {
+                    Some(signature) => self.check_function(&full, params, signature, body)?,
+                    None => return self.err(format!("unknown method '{}'", full)),
+                };
+                Ok(Type::Void)
+            }
+            AstNode::FunctionDecl {
+                name,
                 params,
                 return_type,
                 body,
+                ..
             } => {
                 let signature = match self.state.scopes.last().and_then(|s| s.vars.get(name)) {
                     Some(symbol) => symbol.ty.clone(),
@@ -1249,7 +1403,7 @@ impl Checker {
                     return self.err(format!("cannot assign to '{}'", name));
                 }
                 if symbol.is_imut {
-                    return self.err(format!("cannot modify '{}': it is imut", name));
+                    return self.err(format!("cannot modify '{}': {}", name, self.imut_reason(&symbol)));
                 }
                 if symbol.is_const {
                     return self.err(format!("cannot modify a 'const' value ('{}')", name));
@@ -1344,13 +1498,69 @@ impl Checker {
                 AstNode::Identifier(name) => {
                     return match self.lookup(name) {
                         Some(symbol) if symbol.is_imut && matches!(symbol.kind, SymbolKind::Value) => {
-                            self.err(format!("cannot modify '{}': it is imut", name))
+                            self.err(format!("cannot modify '{}': {}", name, self.imut_reason(symbol)))
                         }
                         _ => self.ensure_not_captured(name),
                     };
                 }
                 _ => return Ok(()),
             }
+        }
+    }
+
+    fn imut_reason(&self, symbol: &Symbol) -> &'static str {
+        if symbol.is_param {
+            "parameters can only be modified when declared 'mut'"
+        } else {
+            "it is imut"
+        }
+    }
+
+    /// What can be passed as `mut`: a `var` (not `const` or `imut`), or a field or an element
+    /// of a value that can be modified. Returns its type.
+    fn check_mut_place(&mut self, place: &AstNode) -> CheckResult<Type> {
+        match place.unlocated() {
+            AstNode::Identifier(name) => {
+                let symbol = match self.lookup(name) {
+                    Some(symbol) => symbol.clone(),
+                    None => return self.err(format!("undefined variable '{}'", name)),
+                };
+                if let Some(owner) = &symbol.owner {
+                    return self.err(format!("'{}' is read-only outside '{}'", name, owner));
+                }
+                self.ensure_not_captured(name)?;
+                if !matches!(symbol.kind, SymbolKind::Value) || matches!(symbol.ty, Type::Module(_)) {
+                    return self.err(format!("'{}' cannot be passed as 'mut'", name));
+                }
+                if symbol.is_imut {
+                    return self.err(format!("cannot pass '{}' as 'mut': {}", name, self.imut_reason(&symbol)));
+                }
+                if symbol.is_const {
+                    return self.err(format!("cannot pass '{}' as 'mut': it is const", name));
+                }
+                Ok(symbol.ty)
+            }
+            AstNode::Member { object, name } => {
+                self.ensure_contents_mutable(object)?;
+                let object_ty = self.check_value(object, None)?;
+                let read_only = match &object_ty {
+                    Type::Module(_) | Type::Variant { .. } => true,
+                    Type::Named { id, .. } => matches!(self.table.get(*id).kind, TypeKind::Builtin { .. }),
+                    _ => false,
+                };
+                if read_only {
+                    return self.err(format!("'{}' cannot be passed as 'mut': it is read-only", name));
+                }
+                self.check_member(object, name)
+            }
+            AstNode::Index { target, .. } => {
+                self.ensure_contents_mutable(target)?;
+                if self.check_value(target, None)? == Type::String {
+                    return self.err("strings cannot be modified".to_string());
+                }
+                self.check_value(place, None)
+            }
+            _ => self.err("only a variable, a field or an element can be passed as 'mut'".to_string()),
         }
     }
 
@@ -1518,7 +1728,17 @@ impl Checker {
         self.push_scope();
         self.state.function_scopes.push(self.state.scopes.len() - 1);
         for (param, ty) in params.iter().zip(&param_types) {
-            self.declare(&param.name, Symbol::value(ty.clone(), false))?;
+            if param.is_mut && name == "anonymous function" {
+                return self.err(format!(
+                    "anonymous functions cannot have 'mut' parameters ('{}')",
+                    param.name
+                ));
+            }
+            // Only `mut` parameters can be modified; the others (and `self`) are imut.
+            let mut symbol = Symbol::value(ty.clone(), !param.is_mut);
+            symbol.is_imut = !param.is_mut;
+            symbol.is_param = true;
+            self.declare(&param.name, symbol)?;
         }
         self.state.returns.push(ReturnContext {
             declared: declared.clone(),
@@ -1674,7 +1894,8 @@ impl Checker {
                 let right_ty = self.check_value(right, None)?;
                 self.binary_type(*op, &left_ty, &right_ty)
             }
-            AstNode::Call { callee, args } => self.check_call(callee, args, expected),
+            AstNode::Call { callee, args, method } => self.check_call(callee, args, method, expected),
+            AstNode::MutArg(_) => self.err("'mut' is only used before a call argument: 'f(mut x)'".to_string()),
             AstNode::Index { target, index } => {
                 let target_ty = self.check_value(target, None)?;
                 let index_ty = self.check_value(index, None)?;
@@ -2085,6 +2306,10 @@ impl Checker {
                     _ => Ok(symbol.ty),
                 }
             }
+            SymbolKind::Value if !symbol.mut_params.is_empty() => self.err(format!(
+                "'{}' has 'mut' parameters and can only be called, not used as a value",
+                name
+            )),
             SymbolKind::Value => Ok(symbol.ty),
         }
     }
@@ -2163,6 +2388,10 @@ impl Checker {
                     SymbolKind::Builtin(builtin) => {
                         self.err(format!("'{}' is a built-in function and must be called", builtin))
                     }
+                    _ if !symbol.mut_params.is_empty() => self.err(format!(
+                        "'{}' has 'mut' parameters and can only be called, not used as a value",
+                        name
+                    )),
                     _ => Ok(symbol.ty),
                 },
                 None => self.missing_member(*id, name),
@@ -2198,7 +2427,13 @@ impl Checker {
     // Calls
     // ------------------------------------------------------------------
 
-    fn check_call(&mut self, callee: &AstNode, args: &[AstNode], expected: Option<&Type>) -> CheckResult<Type> {
+    fn check_call(
+        &mut self,
+        callee: &AstNode,
+        args: &[AstNode],
+        method: &RefCell<Option<MethodRef>>,
+        expected: Option<&Type>,
+    ) -> CheckResult<Type> {
         match callee.unlocated() {
             AstNode::Identifier(name) => {
                 if let Some(symbol) = self.lookup(name).cloned() {
@@ -2207,12 +2442,24 @@ impl Checker {
                         SymbolKind::Constructor { id, variant } => {
                             return self.check_constructor(id, &variant, args, expected)
                         }
+                        SymbolKind::Value if !symbol.mut_params.is_empty() => {
+                            return self.check_function_call_mut(&symbol.ty, &symbol.mut_params, args)
+                        }
                         SymbolKind::Value => {}
                     }
                 }
             }
             AstNode::Member { object, name } => {
+                // `Person.create(...)`: an associated function.
+                if let Some(id) = self.type_path(object) {
+                    return self.check_associated_call(id, name, args, method);
+                }
                 let object_ty = self.check_value(object, None)?;
+                if let Type::Named { id, .. } = &object_ty {
+                    if let Some(info) = self.methods.get(&(*id, name.clone())).cloned() {
+                        return self.check_method(&object_ty, name, info, args, method);
+                    }
+                }
                 return self.check_method_call(&object_ty, name, args, expected);
             }
             _ => {}
@@ -2221,10 +2468,108 @@ impl Checker {
         self.check_function_call(&callee_ty, args)
     }
 
+    /// The type named by `Person` or `module.Person` when used before a `.`, if it is a type
+    /// and not a value.
+    fn type_path(&self, node: &AstNode) -> Option<TypeId> {
+        let found = match node.unlocated() {
+            AstNode::Identifier(name) if self.lookup(name).is_none() => self.lookup_type(name).cloned(),
+            AstNode::Member { object, name } => match object.unlocated() {
+                AstNode::Identifier(module) => match self.lookup(module).map(|s| &s.ty) {
+                    Some(Type::Module(id)) if !self.modules[*id].members.contains_key(name) => {
+                        self.modules[*id].types.get(name).cloned()
+                    }
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        };
+        match found {
+            Some(TypeRef::Type(Type::Named { id, .. })) => Some(id),
+            _ => None,
+        }
+    }
+
+    fn method_name(&self, id: TypeId, name: &str) -> String {
+        format!("{}.{}", self.table.get(id).name, name)
+    }
+
+    /// `Person.create('Ana')`
+    fn check_associated_call(
+        &mut self,
+        id: TypeId,
+        name: &str,
+        args: &[AstNode],
+        method: &RefCell<Option<MethodRef>>,
+    ) -> CheckResult<Type> {
+        let full = self.method_name(id, name);
+        let info = match self.methods.get(&(id, name.to_string())) {
+            Some(info) => info.clone(),
+            None => return self.err(format!("'{}' is not declared", full)),
+        };
+        if info.has_self {
+            return self.err(format!(
+                "'{}' takes 'self': call it on a value ('value.{}(...)')",
+                full, name
+            ));
+        }
+        *method.borrow_mut() = Some(MethodRef {
+            module: info.module.clone(),
+            key: full,
+            has_self: false,
+        });
+        self.check_function_call_mut(&info.ty, &info.mut_params, args)
+    }
+
+    /// `person.greet()`
+    fn check_method(
+        &mut self,
+        object_ty: &Type,
+        name: &str,
+        info: MethodInfo,
+        args: &[AstNode],
+        method: &RefCell<Option<MethodRef>>,
+    ) -> CheckResult<Type> {
+        let id = match object_ty {
+            Type::Named { id, .. } => *id,
+            _ => unreachable!("methods belong to named types"),
+        };
+        let full = self.method_name(id, name);
+        if !info.has_self {
+            return self.err(format!(
+                "'{}' has no 'self': call it on the type ('{}(...)')",
+                full, full
+            ));
+        }
+        *method.borrow_mut() = Some(MethodRef {
+            module: info.module.clone(),
+            key: full,
+            has_self: true,
+        });
+        let ty = match info.ty {
+            Type::Function { params, ret } => Type::Function {
+                params: params[1..].to_vec(),
+                ret,
+            },
+            other => other,
+        };
+        self.check_function_call_mut(&ty, &info.mut_params[1..], args)
+    }
+
     fn check_function_call(&mut self, callee_ty: &Type, args: &[AstNode]) -> CheckResult<Type> {
+        self.check_function_call_mut(callee_ty, &[], args)
+    }
+
+    /// A call to a function whose parameters marked in `mut_params` are `mut`.
+    fn check_function_call_mut(
+        &mut self,
+        callee_ty: &Type,
+        mut_params: &[bool],
+        args: &[AstNode],
+    ) -> CheckResult<Type> {
         match callee_ty {
             Type::Function { params, ret } => {
-                self.check_args(params, args)?;
+                self.check_args_mut(params, mut_params, args)?;
                 Ok((**ret).clone())
             }
             Type::Unknown => {
@@ -2238,6 +2583,10 @@ impl Checker {
     }
 
     fn check_args(&mut self, params: &[Type], args: &[AstNode]) -> CheckResult<Vec<Type>> {
+        self.check_args_mut(params, &[], args)
+    }
+
+    fn check_args_mut(&mut self, params: &[Type], mut_params: &[bool], args: &[AstNode]) -> CheckResult<Vec<Type>> {
         if params.len() != args.len() {
             return self.err(format!(
                 "expected {} argument(s), found {}",
@@ -2247,6 +2596,37 @@ impl Checker {
         }
         let mut types = Vec::new();
         for (i, (param, arg)) in params.iter().zip(args).enumerate() {
+            let is_mut = mut_params.get(i).copied().unwrap_or(false);
+            match (arg.unlocated(), is_mut) {
+                (AstNode::MutArg(place), true) => {
+                    let ty = self.check_mut_place(place)?;
+                    // The function may store any value of the parameter type in the variable,
+                    // so the types must be the same.
+                    if !self.assignable(param, &ty) || !self.assignable(&ty, param) {
+                        return self.err(format!(
+                            "argument {} is 'mut' and must be exactly {}, found {}",
+                            i + 1,
+                            self.show(param),
+                            self.show(&ty)
+                        ));
+                    }
+                    types.push(ty);
+                    continue;
+                }
+                (AstNode::MutArg(_), false) => {
+                    return self.err(format!(
+                        "argument {} is not a 'mut' parameter: remove 'mut'",
+                        i + 1
+                    ))
+                }
+                (_, true) => {
+                    return self.err(format!(
+                        "argument {} is a 'mut' parameter: pass a variable with 'mut' ('f(mut x)')",
+                        i + 1
+                    ))
+                }
+                _ => {}
+            }
             let ty = self.check_value(arg, Some(param))?;
             if !self.assignable(param, &ty) {
                 let hint = match (param, &ty) {
@@ -2553,7 +2933,7 @@ impl Checker {
                 SymbolKind::Constructor { id, variant } => {
                     self.check_constructor(id, &variant, args, expected)
                 }
-                SymbolKind::Value => self.check_function_call(&symbol.ty, args),
+                SymbolKind::Value => self.check_function_call_mut(&symbol.ty, &symbol.mut_params, args),
             };
         }
 

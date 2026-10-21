@@ -132,7 +132,7 @@ type Rect = {
     height: int
 }
 
-function Rect.area(self): float {
+function Rect.area(self): int {
     return self.width * self.height
 }
 
@@ -143,3 +143,40 @@ const rect: Rect = {
 
 print(rect.area()) // 12
 ```
+
+### Methods
+
+A function declared as `function Type.name(...)` belongs to `Type`:
+
+-   With `self` as the first parameter, it is a method: `value.name(...)`. `self` has no type annotation (it is always the type) and, like every parameter, it is read-only.
+-   Without `self`, it is an associated function, called on the type: `Type.name(...)`. It is useful for constructors:
+
+    ```ez
+    function Rect.square(side: int): Rect {
+        return { width: side, height: side }
+    }
+
+    print(Rect.square(3).area()) // 9
+    ```
+
+-   Sum types can have methods too:
+
+    ```ez
+    type Shape = {
+        Circle(radius: float)
+        Square(side: float)
+    }
+
+    function Shape.area(self): float {
+        return match (self) {
+            Circle(r) => 3.14 * r * r
+            Square(s) => s * s
+        }
+    }
+
+    print(Square(2.0).area()) // 4.0
+    ```
+
+-   Methods are declared at the top level of the file that declares the type, and take no `export`: they are available wherever the type is (`import { Point } from 'geometry.ez'` then `Point.origin()`, or `geometry.Point.origin()`).
+-   A method cannot have the same name as a field of its type.
+-   A method cannot change `self` yet (`mut self` is still being designed).

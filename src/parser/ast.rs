@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -133,6 +134,20 @@ pub enum TypeDef {
 pub struct Param {
     pub name: String,
     pub ty: Option<TypeExpr>,
+    /// `mut items: int[]`: the function can modify the caller's variable.
+    pub is_mut: bool,
+}
+
+/// Method or associated function that a call resolves to (`person.greet()`,
+/// `Person.create('Ana')`), recorded by the type checker.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MethodRef {
+    /// Module that declares the method.
+    pub module: PathBuf,
+    /// `Person.greet`
+    pub key: String,
+    /// Whether the object before the `.` is passed as `self`.
+    pub has_self: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -207,7 +222,11 @@ pub enum AstNode {
     Call {
         callee: Box<AstNode>,
         args: Vec<AstNode>,
+        /// Filled by the type checker when the call is a method or an associated function.
+        method: RefCell<Option<MethodRef>>,
     },
+    /// `mut items` as a call argument: the callee may modify the variable.
+    MutArg(Box<AstNode>),
     Index {
         target: Box<AstNode>,
         index: Box<AstNode>,
@@ -261,8 +280,11 @@ pub enum AstNode {
         is_const: bool,
         is_imut: bool,
     },
+    /// `function add(...)`, or a method/associated function `function Person.greet(self)`,
+    /// whose `owner` is `Person`.
     FunctionDecl {
         name: String,
+        owner: Option<String>,
         params: Vec<Param>,
         return_type: Option<TypeExpr>,
         body: Rc<AstNode>,
@@ -309,10 +331,12 @@ impl AstNode {
         }
     }
 
-    /// Name declared by a function, variable or type declaration.
+    /// Name declared by a function, variable or type declaration (methods declare no name).
     pub fn declared_name(&self) -> Option<&str> {
         match self.unlocated() {
-            AstNode::FunctionDecl { name, .. }
+            AstNode::FunctionDecl {
+                name, owner: None, ..
+            }
             | AstNode::VarDecl { name, .. }
             | AstNode::TypeDecl { name, .. } => Some(name),
             _ => None,

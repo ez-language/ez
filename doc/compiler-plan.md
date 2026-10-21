@@ -161,7 +161,9 @@ const person: Person = {
 person.greet()
 ```
 
-Not implemented yet (phase 1).
+A function prefixed with its type but without `self` is an **associated function**, called on the type: `function Person.create(name: string): Person`, called as `Person.create('John')` (e.g. for constructors).
+
+Implemented, except `mut self` (see [Open decisions](#open-decisions)); see [Custom Types](custom-types.md#methods).
 
 ### Value semantics details
 
@@ -174,7 +176,7 @@ Not implemented yet (phase 1).
     addItem(mut items, 2)
     ```
 
-    An `imut` variable can never be passed as `mut`.
+    An `imut` variable can never be passed as `mut`, and a `const` neither (the function could replace the value). Parameters without `mut` (and `self`) are read-only. Implemented; see [Functions](functions.md#mut-parameters).
 -   **Move-only types**, including user types: values that cannot be copied (resources). Assigning moves them, and using the previous variable is a compile error.
 -   **Only move-only types can have a `drop`** method, called automatically when the value is dropped. A copyable type with `drop` would run it once per copy.
 -   **Intentionally shared structures** (graphs, caches) use indices into a list ("arenas"). An explicit shared type may come later, only if arenas prove insufficient.
@@ -355,7 +357,7 @@ A compiler is a large program, with many data structures and many operations tha
     -   `substring`/slicing, `startsWith`, `indexOf` and a string builder;
     -   efficient indexing (`s[i]` is O(n) today).
 4.  **Error propagation**: the `?` operator (implemented).
-5.  **Methods on types** (`Type.method()`, already on the roadmap).
+5.  **Methods on types** (`Type.method()`): implemented, except `mut self`.
 6.  **Complete type inference**: today the checker tolerates unresolved types (`x = None`, `[]`). Code generation needs every type resolved, which requires real unification.
 7.  **System access**:
     -   command-line arguments;
@@ -397,7 +399,7 @@ Notes:
 ## Open decisions
 
 1.  **Mutating methods**: a method that modifies its value declares `mut self` (`function Counter.increment(mut self)`); it can only be called on `var` and `const` variables. Recommended: the call does not repeat the marker (`counter.increment()`, `list.push(x)`), because the method is already called on the variable.
-2.  **Functions without `self`**: `function Person.create(name: string): Person`, called as `Person.create('John')` (associated functions), e.g. for constructors.
+2.  ~~**Functions without `self`**~~: decided and implemented (associated functions, `Person.create('John')`).
 3.  **Declaring a move-only type**: the syntax for user types (e.g. a marker on the `type` declaration).
 4.  **Readable display for user types**: whether `print` and interpolation use a `message(self): string` method of user types too (a naming convention, like `drop`), and a `repr(value)` function to get the structural form (`NotFound('notes.txt')`) when debugging.
 5.  **`regex.compile(pattern) -> Result[Regex, RegexError]`**, with infallible methods on `Regex`: depends on methods.

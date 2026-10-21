@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use crate::error::EzError;
 use crate::parser::ast::{
-    AssignOperator, AstNode, BinaryOperator, ImportKind, MatchArm, Pattern, TemplatePart, TryWrap,
+    AssignOperator, AstNode, BinaryOperator, ImportKind, MatchArm, MethodRef, Pattern, TemplatePart, TryWrap,
     TypeDef, TypeExpr, UnaryOperator,
 };
 use crate::runtime::env::Env;
@@ -32,6 +32,16 @@ impl From<EzError> for Flow {
 
 pub type Exec<T> = Result<T, Flow>;
 
+/// Where a `mut` argument came from, to store the parameter's final value back.
+enum Place {
+    Variable(String),
+    Field(Value, String),
+    Element(Value, Value),
+}
+
+/// Argument values and the places of the `mut` ones, by argument position.
+type Args = (Vec<Value>, Vec<(usize, Place)>);
+
 pub struct Interpreter {
     program: Program,
     modules: HashMap<PathBuf, Rc<ModuleValue>>,
@@ -42,6 +52,10 @@ pub struct Interpreter {
     pub(crate) started: Instant,
     pub(crate) regex_cache: HashMap<String, regex::Regex>,
     current_module: Option<Rc<ModuleValue>>,
+    /// Path of the module being run.
+    module_path: PathBuf,
+    /// Methods and associated functions, by module and `Type.name`.
+    methods: HashMap<(PathBuf, String), Rc<Closure>>,
     /// Functions being executed (0 at the top level of a module).
     function_depth: usize,
     file: Rc<str>,
@@ -83,6 +97,8 @@ impl Interpreter {
             started: Instant::now(),
             regex_cache: HashMap::new(),
             current_module: None,
+            module_path: PathBuf::new(),
+            methods: HashMap::new(),
             function_depth: 0,
             file: Rc::from(""),
             dir: PathBuf::from("."),
@@ -152,6 +168,7 @@ impl Interpreter {
             ),
             self.line,
             self.current_module.replace(Rc::clone(&module)),
+            std::mem::replace(&mut self.module_path, path.to_path_buf()),
         );
 
         let result = self.exec_statements(&program, &env);
@@ -160,6 +177,7 @@ impl Interpreter {
         self.dir = saved.1;
         self.line = saved.2;
         self.current_module = saved.3;
+        self.module_path = saved.4;
 
         match result {
             Ok(_) => {}
@@ -189,20 +207,31 @@ impl Interpreter {
             match statement.unlocated() {
                 AstNode::FunctionDecl {
                     name,
+                    owner,
                     params,
                     return_type,
                     body,
                 } => {
-                    let closure = Closure {
-                        name: name.clone(),
+                    let full = match owner {
+                        Some(owner) => format!("{}.{}", owner, name),
+                        None => name.clone(),
+                    };
+                    let closure = Rc::new(Closure {
+                        name: full.clone(),
                         params: params.clone(),
                         body: Rc::clone(body),
                         env: Rc::clone(env),
                         float_params: params.iter().map(|p| is_float_type(&p.ty)).collect(),
                         returns_float: is_float_type(return_type),
                         file: Rc::clone(&self.file),
-                    };
-                    env.define(name, Value::Function(Rc::new(closure)));
+                    });
+                    match owner {
+                        // Methods are not variables: calls find them by module and type.
+                        Some(_) => {
+                            self.methods.insert((self.module_path.clone(), full), closure);
+                        }
+                        None => env.define(name, Value::Function(closure)),
+                    }
                 }
                 AstNode::TypeDecl {
                     name,
@@ -371,7 +400,11 @@ impl Interpreter {
                 self.unary(op, value)
             }
             AstNode::BinaryOp { left, op, right } => self.eval_binary(left, *op, right, env),
-            AstNode::Call { callee, args } => self.eval_call(callee, args, env),
+            AstNode::Call { callee, args, method } => {
+                let method = method.borrow().clone();
+                self.eval_call(callee, args, method, env)
+            }
+            AstNode::MutArg(_) => Err(self.error("'mut' is only used before a call argument")),
             AstNode::Index { target, index } => {
                 let target = self.eval(target, env)?;
                 let index = self.eval(index, env)?;
@@ -475,6 +508,7 @@ impl Interpreter {
             // around it where it is declared (it was hoisted with access to the whole block).
             AstNode::FunctionDecl {
                 name,
+                owner: None,
                 params,
                 return_type,
                 body,
@@ -496,7 +530,7 @@ impl Interpreter {
                 }
                 Ok(Value::Void)
             }
-            AstNode::TypeDecl { .. } => Ok(Value::Void),
+            AstNode::FunctionDecl { .. } | AstNode::TypeDecl { .. } => Ok(Value::Void),
             // Imports run when the block is hoisted.
             AstNode::Import { .. } => Ok(Value::Void),
         }
@@ -935,19 +969,120 @@ impl Interpreter {
     // Calls
     // ------------------------------------------------------------------
 
-    fn eval_call(&mut self, callee: &AstNode, args: &[AstNode], env: &Rc<Env>) -> Exec<Value> {
+    fn eval_call(
+        &mut self,
+        callee: &AstNode,
+        args: &[AstNode],
+        method: Option<MethodRef>,
+        env: &Rc<Env>,
+    ) -> Exec<Value> {
+        // A method (`person.greet()`) or an associated function (`Person.create()`).
+        if let Some(method) = method {
+            let closure = match self.methods.get(&(method.module.clone(), method.key.clone())) {
+                Some(closure) => Rc::clone(closure),
+                None => return Err(self.error(format!("method '{}' not found", method.key))),
+            };
+            let mut values = Vec::new();
+            if method.has_self {
+                if let AstNode::Member { object, .. } = callee.unlocated() {
+                    values.push(self.eval(object, env)?);
+                }
+            }
+            let offset = values.len();
+            let (rest, places) = self.eval_args(args, env)?;
+            values.extend(rest);
+            return self.call_with_places(&Value::Function(closure), values, places, offset, env);
+        }
         if let AstNode::Member { object, name } = callee.unlocated() {
             let object = self.eval(object, env)?;
-            let args = self.eval_args(args, env)?;
+            let (args, places) = self.eval_args(args, env)?;
+            if !places.is_empty() {
+                let function = self.member(&object, name)?;
+                return self.call_with_places(&function, args, places, 0, env);
+            }
             return self.call_method(&object, name, args);
         }
         let callee = self.eval(callee, env)?;
-        let args = self.eval_args(args, env)?;
-        self.call_value(&callee, args)
+        let (args, places) = self.eval_args(args, env)?;
+        self.call_with_places(&callee, args, places, 0, env)
     }
 
-    fn eval_args(&mut self, args: &[AstNode], env: &Rc<Env>) -> Exec<Vec<Value>> {
-        args.iter().map(|arg| self.eval(arg, env)).collect()
+    /// The argument values, and where each `mut` argument came from (by argument position).
+    fn eval_args(&mut self, args: &[AstNode], env: &Rc<Env>) -> Exec<Args> {
+        let mut values = Vec::with_capacity(args.len());
+        let mut places = Vec::new();
+        for (i, arg) in args.iter().enumerate() {
+            match arg.unlocated() {
+                AstNode::MutArg(place) => {
+                    let (value, place) = self.eval_place(place, env)?;
+                    values.push(value);
+                    places.push((i, place));
+                }
+                other => values.push(self.eval(other, env)?),
+            }
+        }
+        Ok((values, places))
+    }
+
+    fn eval_place(&mut self, node: &AstNode, env: &Rc<Env>) -> Exec<(Value, Place)> {
+        match node.unlocated() {
+            AstNode::Identifier(name) => match env.get(name) {
+                Some(value) => Ok((value, Place::Variable(name.clone()))),
+                None => Err(self.error(format!("undefined variable '{}'", name))),
+            },
+            AstNode::Member { object, name } => {
+                let object = self.eval(object, env)?;
+                let value = self.member(&object, name)?;
+                Ok((value, Place::Field(object, name.clone())))
+            }
+            AstNode::Index { target, index } => {
+                let target = self.eval(target, env)?;
+                let index = self.eval(index, env)?;
+                let value = self.index(&target, &index)?;
+                Ok((value, Place::Element(target, index)))
+            }
+            _ => Err(self.error("only a variable, a field or an element can be passed as 'mut'")),
+        }
+    }
+
+    fn set_place(&mut self, place: Place, value: Value, env: &Rc<Env>) -> Exec<()> {
+        match place {
+            Place::Variable(name) => {
+                env.assign(&name, value);
+            }
+            Place::Field(Value::Object(fields), name) => fields.borrow_mut().set(&name, value),
+            Place::Element(Value::List(items), index) => {
+                let position = self.list_position(items.borrow().len(), &index)?;
+                items.borrow_mut()[position] = value;
+            }
+            Place::Element(Value::Object(object), Value::Str(key)) => object.borrow_mut().set(&key, value),
+            _ => return Err(self.error("invalid 'mut' argument")),
+        }
+        Ok(())
+    }
+
+    /// Calls `callee`; then stores the final value of each `mut` parameter back where its
+    /// argument came from. `offset` is the number of values before the arguments (`self`).
+    fn call_with_places(
+        &mut self,
+        callee: &Value,
+        args: Vec<Value>,
+        places: Vec<(usize, Place)>,
+        offset: usize,
+        env: &Rc<Env>,
+    ) -> Exec<Value> {
+        let closure = match callee {
+            Value::Function(closure) => closure,
+            other => return self.call_value(other, args),
+        };
+        let (value, scope) = self.run_closure(closure, args)?;
+        for (i, place) in places {
+            let param = &closure.params[i + offset].name;
+            if let Some(final_value) = scope.get_local(param) {
+                self.set_place(place, final_value, env)?;
+            }
+        }
+        Ok(value)
     }
 
     pub(crate) fn call_value(&mut self, callee: &Value, args: Vec<Value>) -> Exec<Value> {
@@ -970,6 +1105,11 @@ impl Interpreter {
     }
 
     fn call_closure(&mut self, closure: &Rc<Closure>, args: Vec<Value>) -> Exec<Value> {
+        self.run_closure(closure, args).map(|(value, _)| value)
+    }
+
+    /// Runs a function; also returns the scope of its parameters.
+    fn run_closure(&mut self, closure: &Rc<Closure>, args: Vec<Value>) -> Exec<(Value, Rc<Env>)> {
         if args.len() != closure.params.len() {
             return Err(self.error(format!(
                 "'{}' expects {} argument(s), found {}",
@@ -999,7 +1139,7 @@ impl Interpreter {
             Err(Flow::Break) | Err(Flow::Continue) => Value::Void,
             Err(error) => return Err(error),
         };
-        Ok(coerce(value, closure.returns_float))
+        Ok((coerce(value, closure.returns_float), scope))
     }
 
     fn call_method(&mut self, object: &Value, name: &str, args: Vec<Value>) -> Exec<Value> {

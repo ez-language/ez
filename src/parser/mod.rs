@@ -463,6 +463,10 @@ impl Parser {
     fn parse_params(&mut self) -> Result<Vec<Param>, EzError> {
         self.expect(Token::LParen, "'(' before the parameters")?;
         let params = self.parse_comma_separated(&Token::RParen, |p| {
+            let is_mut = *p.current() == Token::Mut;
+            if is_mut {
+                p.advance();
+            }
             let name = p.expect_identifier("parameter name")?;
             let ty = if *p.current() == Token::Colon {
                 p.advance();
@@ -470,7 +474,7 @@ impl Parser {
             } else {
                 None
             };
-            Ok(Param { name, ty })
+            Ok(Param { name, ty, is_mut })
         })?;
         self.expect(Token::RParen, "')' after the parameters")?;
         Ok(params)
@@ -487,12 +491,19 @@ impl Parser {
 
     fn parse_function_declaration(&mut self) -> Result<AstNode, EzError> {
         self.advance(); // function
-        let name = self.expect_identifier("function name")?;
+        let mut name = self.expect_identifier("function name")?;
+        // `function Person.greet(self)`: a method (or associated function) of `Person`.
+        let mut owner = None;
+        if *self.current() == Token::Dot {
+            self.advance();
+            owner = Some(std::mem::replace(&mut name, self.expect_name("method name")?));
+        }
         let params = self.parse_params()?;
         let return_type = self.parse_optional_return_type()?;
         let body = self.parse_function_body(true)?;
         Ok(AstNode::FunctionDecl {
             name,
+            owner,
             params,
             return_type,
             body: Rc::new(body),
@@ -897,12 +908,19 @@ impl Parser {
     fn parse_call(&mut self, callee: AstNode) -> Result<AstNode, EzError> {
         self.advance(); // '('
         let args = self.grouped(|p| {
-            p.parse_comma_separated(&Token::RParen, |p| p.parse_expression(0))
+            p.parse_comma_separated(&Token::RParen, |p| {
+                if *p.current() == Token::Mut {
+                    p.advance();
+                    return Ok(AstNode::MutArg(Box::new(p.parse_expression(0)?)));
+                }
+                p.parse_expression(0)
+            })
         })?;
         self.expect(Token::RParen, "')' at the end of the arguments")?;
         Ok(AstNode::Call {
             callee: Box::new(callee),
             args,
+            method: RefCell::new(None),
         })
     }
 
@@ -1285,6 +1303,7 @@ mod tests {
         let expected = AstNode::Call {
             callee: Box::new(ident("f")),
             args: vec![num(1), bin(ident("x"), BinaryOperator::Add, num(2))],
+            method: RefCell::new(None),
         };
         assert_eq!(ast, expected);
     }
@@ -1309,6 +1328,7 @@ mod tests {
                     name: "length".to_string(),
                 }),
                 args: vec![],
+                method: RefCell::new(None),
             }
         );
     }
@@ -1593,6 +1613,7 @@ mod tests {
                 params,
                 return_type,
                 body,
+                ..
             } => {
                 assert_eq!(name.as_str(), "sum");
                 assert_eq!(params.len(), 2);
