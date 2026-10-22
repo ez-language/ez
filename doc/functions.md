@@ -102,6 +102,7 @@ print(numbers) // [11, 2, 3]
 -   Only a `var` (not `const` or `imut`), or a field or element of a value that can be changed, can be passed as `mut`: `reset(mut person.age)`, `reset(mut numbers[0])`.
 -   The argument must have exactly the type of the parameter: an `int` variable cannot be passed as `mut x: float`.
 -   A function with `mut` parameters can only be called, not stored in a variable, and anonymous functions cannot have `mut` parameters.
+-   Methods use `mut self` instead, and their call has no marker (`counter.increment()`); see [Custom Types](custom-types.md#methods).
 
 ## Methods and Associated Functions
 

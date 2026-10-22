@@ -390,35 +390,16 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
             _ => none(),
         }),
 
-        "regex.match" => {
+        "regex.compile" => {
             let pattern = str_arg(interpreter, &args, 0)?;
-            let input = str_arg(interpreter, &args, 1)?;
-            let regex = compile_regex(interpreter, &format!("^(?:{})$", pattern))?;
-            Ok(Value::Bool(regex.is_match(input)))
-        }
-        "regex.search" => {
-            let pattern = str_arg(interpreter, &args, 0)?;
-            let input = str_arg(interpreter, &args, 1)?;
-            let regex = compile_regex(interpreter, pattern)?;
-            Ok(match regex.find(input) {
-                Some(found) => some(match_object(input, &found)),
-                None => none(),
+            Ok(match regex::Regex::new(pattern) {
+                Ok(regex) => ok(Value::Native(Rc::new(RefCell::new(Native::Regex(regex))))),
+                Err(error) => err(variant(
+                    "RegexError",
+                    "InvalidPattern",
+                    vec![Value::str(pattern), Value::str(&regex_error_message(&error))],
+                )),
             })
-        }
-        "regex.findAll" => {
-            let pattern = str_arg(interpreter, &args, 0)?;
-            let input = str_arg(interpreter, &args, 1)?;
-            let regex = compile_regex(interpreter, pattern)?;
-            Ok(Value::list(
-                regex.find_iter(input).map(|m| match_object(input, &m)).collect(),
-            ))
-        }
-        "regex.replace" => {
-            let pattern = str_arg(interpreter, &args, 0)?;
-            let replacement = str_arg(interpreter, &args, 1)?;
-            let input = str_arg(interpreter, &args, 2)?;
-            let regex = compile_regex(interpreter, pattern)?;
-            Ok(Value::str(&regex.replace_all(input, replacement)))
         }
 
         other => Err(interpreter.error(format!("unknown built-in function '{}'", other))),
@@ -426,10 +407,18 @@ pub fn call(interpreter: &mut Interpreter, name: &str, args: Vec<Value>) -> Exec
 }
 
 /// Standard library error types whose values have a human-readable message.
-pub const ERROR_TYPES: &[&str] = &["ParseError", "MathError", "FileError", "HttpError", "JsonError", "DateError"];
+pub const ERROR_TYPES: &[&str] = &[
+    "ParseError",
+    "MathError",
+    "FileError",
+    "HttpError",
+    "JsonError",
+    "DateError",
+    "RegexError",
+];
 
 /// Human-readable text of a standard library error (`NotFound('a.txt')` → `file 'a.txt' not
-/// found`), used by `print`, interpolation and `.message()`.
+/// found`), used by `print`, interpolation and `.display()`.
 pub fn error_message(error: &VariantValue) -> Option<String> {
     if !ERROR_TYPES.contains(&error.sum.name.as_str()) {
         return None;
@@ -460,6 +449,7 @@ pub fn error_message(error: &VariantValue) -> Option<String> {
         ),
         "PatternMismatch" => format!("'{}' does not match the pattern '{}'", text(0), text(1)),
         "InvalidDate" => format!("'{}' is not a valid date", text(0)),
+        "InvalidPattern" => format!("invalid regular expression '{}': {}", text(0), text(1)),
         _ => return None,
     };
     Some(message)
@@ -563,6 +553,7 @@ pub fn native_method(
     let mut native = native.borrow_mut();
     let handle = match &mut *native {
         Native::File(handle) => handle,
+        Native::Regex(regex) => return regex_method(interpreter, regex, name, args),
         Native::DateTime(_) => {
             return Err(interpreter.error(format!("DateTime has no method '{}'", name)))
         }
@@ -840,14 +831,37 @@ fn http_request(method: &str, url: &str, body: Option<String>) -> Value {
 // regex
 // ----------------------------------------------------------------------
 
-fn compile_regex(interpreter: &mut Interpreter, pattern: &str) -> Exec<regex::Regex> {
-    if let Some(regex) = interpreter.regex_cache.get(pattern) {
-        return Ok(regex.clone());
+/// The last line of the `regex` crate's message (`unclosed group`), without the drawing of the
+/// pattern above it.
+fn regex_error_message(error: &regex::Error) -> String {
+    let text = error.to_string();
+    let last = text.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("");
+    last.trim().trim_start_matches("error: ").to_string()
+}
+
+/// Methods of a compiled `Regex`.
+fn regex_method(interpreter: &mut Interpreter, regex: &regex::Regex, name: &str, args: Vec<Value>) -> Exec<Value> {
+    let input = str_arg(interpreter, &args, 0)?;
+    match name {
+        "test" => Ok(Value::Bool(regex.is_match(input))),
+        "find" => Ok(match regex.find(input) {
+            Some(found) => some(match_object(input, &found)),
+            None => none(),
+        }),
+        "findAll" => Ok(Value::list(
+            regex.find_iter(input).map(|m| match_object(input, &m)).collect(),
+        )),
+        "replace" | "replaceAll" => {
+            let replacement = str_arg(interpreter, &args, 1)?;
+            Ok(Value::str(&if name == "replace" {
+                regex.replace(input, replacement)
+            } else {
+                regex.replace_all(input, replacement)
+            }))
+        }
+        "split" => Ok(Value::list(regex.split(input).map(Value::str).collect())),
+        other => Err(interpreter.error(format!("Regex has no method '{}'", other))),
     }
-    let regex = regex::Regex::new(pattern)
-        .map_err(|e| interpreter.error(format!("invalid regular expression: {}", e)))?;
-    interpreter.regex_cache.insert(pattern.to_string(), regex.clone());
-    Ok(regex)
 }
 
 /// `Match { value, start, end }`, with positions counted in characters.

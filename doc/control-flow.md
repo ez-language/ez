@@ -71,6 +71,25 @@ for name in names {
 }
 ```
 
+#### The loop variable
+
+The loop variable is `imut`: assigning to it, or changing its contents, is an error. With `for mut`, it can be changed, but it is a copy: the list does not change.
+
+```ez
+for name in names {
+    name = name.upper() // Error! cannot modify 'name': the 'for' variable is imut (use 'for mut' to change it)
+}
+
+var rows = [[1, 2], [3, 4]]
+
+for mut row in rows {
+    row[0] = 0
+    print(row) // [0, 2], then [0, 4]
+}
+
+print(rows) // [[1, 2], [3, 4]]
+```
+
 ### `while` Loop
 
 Repeats a block of code while a condition is true.
@@ -132,7 +151,7 @@ Each arm follows the pattern:
 Pattern => Expression
 ```
 
-Arms are matched in order, and the first one that matches will be executed. Pattern matching supports destructuring and variant matching for sum types.
+Arms are matched in order, and the first one that matches will be executed. Pattern matching supports destructuring and variant matching for sum types. The variables bound by a pattern (`value`, `error`) are `imut`.
 
 ```ez
 match (user) {

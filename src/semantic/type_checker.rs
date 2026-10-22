@@ -55,8 +55,9 @@ struct Symbol {
     owner: Option<String>,
     /// For functions: which parameters are `mut` (empty when none is).
     mut_params: Vec<bool>,
-    /// A function parameter (read-only unless it is `mut`).
-    is_param: bool,
+    /// Why the variable is read-only, when the reason is not its declaration (a parameter,
+    /// `self`, the `for` variable...).
+    reason: Option<&'static str>,
 }
 
 impl Symbol {
@@ -68,7 +69,7 @@ impl Symbol {
             kind: SymbolKind::Value,
             owner: None,
             mut_params: Vec::new(),
-            is_param: false,
+            reason: None,
         }
     }
 
@@ -80,7 +81,7 @@ impl Symbol {
             kind: SymbolKind::Builtin(name.to_string()),
             owner: None,
             mut_params: Vec::new(),
-            is_param: false,
+            reason: None,
         }
     }
 }
@@ -145,6 +146,8 @@ pub struct BuiltinTypes {
     pub datetime: TypeId,
     pub response: TypeId,
     pub regex_match: TypeId,
+    pub regex: TypeId,
+    pub regex_error: TypeId,
 }
 
 /// Per-module checking state.
@@ -173,6 +176,8 @@ pub struct Checker {
     asts: HashMap<PathBuf, Rc<Vec<AstNode>>>,
     /// Methods and associated functions of each type, by type and name.
     methods: HashMap<(TypeId, String), MethodInfo>,
+    /// Argument types of the last built-in call checked.
+    last_arg_types: Vec<Type>,
     state: ModuleState,
 }
 
@@ -296,6 +301,30 @@ impl Checker {
                 methods: vec![],
             },
         );
+        let s = || Type::String;
+        let match_ty = Self::named(regex_match);
+        let regex = table.add(
+            "Regex",
+            0,
+            TypeKind::Builtin {
+                fields: vec![],
+                methods: vec![
+                    ("test".to_string(), vec![s()], Type::Boolean),
+                    (
+                        "find".to_string(),
+                        vec![s()],
+                        Type::Named {
+                            id: ids["Option"],
+                            args: vec![match_ty.clone()],
+                        },
+                    ),
+                    ("findAll".to_string(), vec![s()], Type::List(Box::new(match_ty))),
+                    ("replace".to_string(), vec![s(), s()], s()),
+                    ("replaceAll".to_string(), vec![s(), s()], s()),
+                    ("split".to_string(), vec![s()], Type::List(Box::new(s()))),
+                ],
+            },
+        );
 
         Checker {
             table,
@@ -315,6 +344,8 @@ impl Checker {
                 datetime,
                 response,
                 regex_match,
+                regex,
+                regex_error: ids["RegexError"],
             },
             modules: Vec::new(),
             module_by_path: HashMap::new(),
@@ -322,6 +353,7 @@ impl Checker {
             loading: Vec::new(),
             asts: HashMap::new(),
             methods: HashMap::new(),
+            last_arg_types: Vec::new(),
             state: ModuleState::default(),
         }
     }
@@ -340,6 +372,7 @@ impl Checker {
             "Json" => b.json,
             "JsonError" => b.json_error,
             "DateError" => b.date_error,
+            "RegexError" => b.regex_error,
             other => panic!("unknown built-in sum type '{}'", other),
         }
     }
@@ -403,7 +436,7 @@ impl Checker {
                         },
                         owner: None,
                         mut_params: Vec::new(),
-                        is_param: false,
+                        reason: None,
                     },
                 );
             }
@@ -996,18 +1029,27 @@ impl Checker {
         }
 
         let has_self = params.first().is_some_and(|p| p.name == "self");
+        if name == "debug" {
+            return self.err(format!(
+                "cannot declare '{}': every type has 'debug()', which shows the structure of the value",
+                full
+            ));
+        }
+        if name == "display" {
+            let returns_string = matches!(return_type, Some(TypeExpr::Named(t)) if t == "string");
+            if !has_self || params.len() != 1 || params[0].is_mut || !returns_string {
+                return self.err(format!(
+                    "'{}' must be declared as 'function {}(self): string'",
+                    full, full
+                ));
+            }
+        }
         for (i, param) in params.iter().enumerate() {
             if param.name != "self" {
                 continue;
             }
             if i > 0 {
                 return self.err(format!("in '{}', 'self' must be the first parameter", full));
-            }
-            if param.is_mut {
-                return self.err(format!(
-                    "'mut self' is not available yet: '{}' cannot modify the value it is called on",
-                    full
-                ));
             }
             if param.ty.is_some() {
                 return self.err(format!(
@@ -1278,6 +1320,7 @@ impl Checker {
             }
             AstNode::For {
                 variable,
+                is_mut,
                 iterable,
                 body,
             } => {
@@ -1292,11 +1335,10 @@ impl Checker {
                     },
                     _ => return self.not_iterable(&iterable_ty),
                 };
-                self.check_block(
-                    body,
-                    None,
-                    vec![(variable.clone(), Symbol::value(item, false))],
-                )?;
+                let mut symbol = Symbol::value(item, !is_mut);
+                symbol.is_imut = !is_mut;
+                symbol.reason = Some("the 'for' variable is imut (use 'for mut' to change it)");
+                self.check_block(body, None, vec![(variable.clone(), symbol)])?;
                 Ok(Type::Void)
             }
             AstNode::Break | AstNode::Continue => Ok(Type::Never),
@@ -1406,6 +1448,9 @@ impl Checker {
                     return self.err(format!("cannot modify '{}': {}", name, self.imut_reason(&symbol)));
                 }
                 if symbol.is_const {
+                    if let Some(reason) = symbol.reason {
+                        return self.err(format!("cannot modify '{}': {}", name, reason));
+                    }
                     return self.err(format!("cannot modify a 'const' value ('{}')", name));
                 }
                 let new_ty = self.check_assigned_value(&symbol.ty, op, value, name)?;
@@ -1509,16 +1554,19 @@ impl Checker {
     }
 
     fn imut_reason(&self, symbol: &Symbol) -> &'static str {
-        if symbol.is_param {
-            "parameters can only be modified when declared 'mut'"
-        } else {
-            "it is imut"
-        }
+        symbol.reason.unwrap_or("it is imut")
     }
 
     /// What can be passed as `mut`: a `var` (not `const` or `imut`), or a field or an element
     /// of a value that can be modified. Returns its type.
-    fn check_mut_place(&mut self, place: &AstNode) -> CheckResult<Type> {
+    ///
+    /// For the value a `mut self` method is called on (`receiver` is the method), a `const` is
+    /// accepted too: the method can change the contents, not replace the value.
+    fn check_mut_place(&mut self, place: &AstNode, receiver: Option<&str>) -> CheckResult<Type> {
+        let what = |name: &str| match receiver {
+            Some(method) => format!("cannot call '{}' on '{}', as it changes the value", method, name),
+            None => format!("cannot pass '{}' as 'mut'", name),
+        };
         match place.unlocated() {
             AstNode::Identifier(name) => {
                 let symbol = match self.lookup(name) {
@@ -1530,13 +1578,13 @@ impl Checker {
                 }
                 self.ensure_not_captured(name)?;
                 if !matches!(symbol.kind, SymbolKind::Value) || matches!(symbol.ty, Type::Module(_)) {
-                    return self.err(format!("'{}' cannot be passed as 'mut'", name));
+                    return self.err(what(name));
                 }
                 if symbol.is_imut {
-                    return self.err(format!("cannot pass '{}' as 'mut': {}", name, self.imut_reason(&symbol)));
+                    return self.err(format!("{}: {}", what(name), self.imut_reason(&symbol)));
                 }
-                if symbol.is_const {
-                    return self.err(format!("cannot pass '{}' as 'mut': it is const", name));
+                if symbol.is_const && receiver.is_none() {
+                    return self.err(format!("{}: it is const", what(name)));
                 }
                 Ok(symbol.ty)
             }
@@ -1549,7 +1597,7 @@ impl Checker {
                     _ => false,
                 };
                 if read_only {
-                    return self.err(format!("'{}' cannot be passed as 'mut': it is read-only", name));
+                    return self.err(format!("{}: it is read-only", what(name)));
                 }
                 self.check_member(object, name)
             }
@@ -1560,7 +1608,13 @@ impl Checker {
                 }
                 self.check_value(place, None)
             }
-            _ => self.err("only a variable, a field or an element can be passed as 'mut'".to_string()),
+            _ => match receiver {
+                Some(method) => self.err(format!(
+                    "'{}' changes the value it is called on: call it on a variable, a field or an element",
+                    method
+                )),
+                None => self.err("only a variable, a field or an element can be passed as 'mut'".to_string()),
+            },
         }
     }
 
@@ -1680,7 +1734,7 @@ impl Checker {
             "datetime" => &[("DateTime", b.datetime)],
             "http" => &[("Response", b.response)],
             "json" => &[("JsonObject", b.json_object)],
-            "regex" => &[("Match", b.regex_match)],
+            "regex" => &[("Match", b.regex_match), ("Regex", b.regex)],
             _ => &[],
         };
         for (type_name, id) in object_types {
@@ -1734,10 +1788,16 @@ impl Checker {
                     param.name
                 ));
             }
-            // Only `mut` parameters can be modified; the others (and `self`) are imut.
-            let mut symbol = Symbol::value(ty.clone(), !param.is_mut);
+            // Only `mut` parameters can be modified; the others (and `self`) are imut. `mut self`
+            // can change the value's contents, but not replace it.
+            let is_mut_self = param.is_mut && param.name == "self";
+            let mut symbol = Symbol::value(ty.clone(), !param.is_mut || is_mut_self);
             symbol.is_imut = !param.is_mut;
-            symbol.is_param = true;
+            symbol.reason = Some(if is_mut_self {
+                "'mut self' can change its fields, not replace the value"
+            } else {
+                "parameters can only be modified when declared 'mut'"
+            });
             self.declare(&param.name, symbol)?;
         }
         self.state.returns.push(ReturnContext {
@@ -1833,8 +1893,9 @@ impl Checker {
             AstNode::BooleanLiteral(_) => Ok(Type::Boolean),
             AstNode::TemplateString(parts) => {
                 for part in parts {
-                    if let TemplatePart::Expression(expression) = part {
-                        self.check_value(expression, None)?;
+                    if let TemplatePart::Expression(expression, display) = part {
+                        let ty = self.check_value(expression, None)?;
+                        *display.borrow_mut() = self.display_method(&ty);
                     }
                 }
                 Ok(Type::String)
@@ -1894,7 +1955,26 @@ impl Checker {
                 let right_ty = self.check_value(right, None)?;
                 self.binary_type(*op, &left_ty, &right_ty)
             }
-            AstNode::Call { callee, args, method } => self.check_call(callee, args, method, expected),
+            AstNode::Call {
+                callee,
+                args,
+                method,
+                displays,
+            } => {
+                let ty = self.check_call(callee, args, method, expected)?;
+                // `print(person)` and `string(person)` use `Person.display`, if declared.
+                if let AstNode::Identifier(name) = callee.unlocated() {
+                    let is_display = matches!(
+                        self.lookup(name).map(|s| &s.kind),
+                        Some(SymbolKind::Builtin(builtin)) if builtin == "print" || builtin == "string"
+                    );
+                    if is_display {
+                        let types = std::mem::take(&mut self.last_arg_types);
+                        *displays.borrow_mut() = types.iter().map(|t| self.display_method(t)).collect();
+                    }
+                }
+                Ok(ty)
+            }
             AstNode::MutArg(_) => self.err("'mut' is only used before a call argument: 'f(mut x)'".to_string()),
             AstNode::Index { target, index } => {
                 let target_ty = self.check_value(target, None)?;
@@ -2455,9 +2535,9 @@ impl Checker {
                     return self.check_associated_call(id, name, args, method);
                 }
                 let object_ty = self.check_value(object, None)?;
-                if let Type::Named { id, .. } = &object_ty {
+                if let Type::Named { id, .. } | Type::Variant { id, .. } = &object_ty {
                     if let Some(info) = self.methods.get(&(*id, name.clone())).cloned() {
-                        return self.check_method(&object_ty, name, info, args, method);
+                        return self.check_method(object, *id, name, info, args, method);
                     }
                 }
                 return self.check_method_call(&object_ty, name, args, expected);
@@ -2486,6 +2566,20 @@ impl Checker {
         };
         match found {
             Some(TypeRef::Type(Type::Named { id, .. })) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// The `display` method declared for the type, used by `print` and interpolation.
+    fn display_method(&self, ty: &Type) -> Option<MethodRef> {
+        match ty {
+            Type::Named { id, .. } | Type::Variant { id, .. } => {
+                self.methods.get(&(*id, "display".to_string())).map(|info| MethodRef {
+                    module: info.module.clone(),
+                    key: self.method_name(*id, "display"),
+                    has_self: true,
+                })
+            }
             _ => None,
         }
     }
@@ -2524,22 +2618,23 @@ impl Checker {
     /// `person.greet()`
     fn check_method(
         &mut self,
-        object_ty: &Type,
+        object: &AstNode,
+        id: TypeId,
         name: &str,
         info: MethodInfo,
         args: &[AstNode],
         method: &RefCell<Option<MethodRef>>,
     ) -> CheckResult<Type> {
-        let id = match object_ty {
-            Type::Named { id, .. } => *id,
-            _ => unreachable!("methods belong to named types"),
-        };
         let full = self.method_name(id, name);
         if !info.has_self {
             return self.err(format!(
                 "'{}' has no 'self': call it on the type ('{}(...)')",
                 full, full
             ));
+        }
+        // `mut self`: the call needs no marker, but the value must be one that can change.
+        if info.mut_params[0] {
+            self.check_mut_place(object, Some(&full))?;
         }
         *method.borrow_mut() = Some(MethodRef {
             module: info.module.clone(),
@@ -2599,7 +2694,7 @@ impl Checker {
             let is_mut = mut_params.get(i).copied().unwrap_or(false);
             match (arg.unlocated(), is_mut) {
                 (AstNode::MutArg(place), true) => {
-                    let ty = self.check_mut_place(place)?;
+                    let ty = self.check_mut_place(place, None)?;
                     // The function may store any value of the parameter type in the variable,
                     // so the types must be the same.
                     if !self.assignable(param, &ty) || !self.assignable(&ty, param) {
@@ -2759,6 +2854,7 @@ impl Checker {
     /// Checks a call to a built-in function and returns its result type.
     fn check_builtin_call(&mut self, name: &str, args: &[AstNode]) -> CheckResult<Type> {
         let types = self.arg_types(args)?;
+        self.last_arg_types = types.clone();
         let b = self.builtins;
         let s = Type::String;
         let check = |checker: &Self, expected: &[Type]| -> CheckResult<()> {
@@ -2896,21 +2992,9 @@ impl Checker {
                 Ok(self.option_of(value))
             }
 
-            "regex.match" => {
-                check(self, &[s.clone(), s])?;
-                Ok(Type::Boolean)
-            }
-            "regex.search" => {
-                check(self, &[s.clone(), s])?;
-                Ok(self.option_of(Self::named(b.regex_match)))
-            }
-            "regex.findAll" => {
-                check(self, &[s.clone(), s])?;
-                Ok(Type::List(Box::new(Self::named(b.regex_match))))
-            }
-            "regex.replace" => {
-                check(self, &[s.clone(), s.clone(), s])?;
-                Ok(Type::String)
+            "regex.compile" => {
+                check(self, &[s])?;
+                Ok(result_with(Self::named(b.regex), b.regex_error))
             }
             other => self.err(format!("unknown built-in function '{}'", other)),
         }
@@ -2937,22 +3021,6 @@ impl Checker {
             };
         }
 
-        // `error.message()` on standard library errors: a human-readable text.
-        if let Type::Named { id, .. } | Type::Variant { id, .. } = object_ty {
-            let b = self.builtins;
-            let error_types = [
-                b.parse_error,
-                b.math_error,
-                b.file_error,
-                b.http_error,
-                b.json_error,
-                b.date_error,
-            ];
-            if name == "message" && error_types.contains(id) {
-                self.check_args(&[], args)?;
-                return Ok(Type::String);
-            }
-        }
         // `result.mapErr(f)`: converts the error with `f` (a function or a variant constructor).
         if let Type::Named { id, args: type_args } = object_ty {
             if *id == self.builtins.result && name == "mapErr" {
@@ -3000,6 +3068,12 @@ impl Checker {
             if let Some((_, field_ty)) = fields.into_iter().find(|(n, _)| n == name) {
                 return self.check_function_call(&field_ty, args);
             }
+        }
+        // Every value has `display()` (what `print` shows: readable) and `debug()` (its
+        // structure).
+        if name == "display" || name == "debug" {
+            self.check_args(&[], args)?;
+            return Ok(Type::String);
         }
         self.err(format!(
             "a value of type {} has no method '{}'",
@@ -3077,9 +3151,10 @@ impl Checker {
                 if ty.is_dynamic() && self.is_constructor_name(name) {
                     return Ok(());
                 }
-                self.current_scope()
-                    .vars
-                    .insert(name.clone(), Symbol::value(ty.clone(), false));
+                let mut symbol = Symbol::value(ty.clone(), true);
+                symbol.is_imut = true;
+                symbol.reason = Some("variables bound by 'match' are imut");
+                self.current_scope().vars.insert(name.clone(), symbol);
                 Ok(())
             }
             Pattern::Variant { name, args } => {

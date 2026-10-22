@@ -449,12 +449,17 @@ impl Parser {
 
     fn parse_for(&mut self) -> Result<AstNode, EzError> {
         self.advance(); // for
+        let is_mut = *self.current() == Token::Mut;
+        if is_mut {
+            self.advance();
+        }
         let variable = self.expect_identifier("variable name for 'for'")?;
         self.expect(Token::In, "'in'")?;
         let iterable = self.parse_expression(0)?;
         let body = self.parse_loop_body()?;
         Ok(AstNode::For {
             variable,
+            is_mut,
             iterable: Box::new(iterable),
             body: Box::new(body),
         })
@@ -921,6 +926,7 @@ impl Parser {
             callee: Box::new(callee),
             args,
             method: RefCell::new(None),
+            displays: RefCell::new(Vec::new()),
         })
     }
 
@@ -1149,7 +1155,7 @@ fn parse_template(raw: &str, line: usize) -> Result<AstNode, EzError> {
                     sub_parser.current()
                 ));
             }
-            parts.push(TemplatePart::Expression(expression));
+            parts.push(TemplatePart::Expression(expression, RefCell::new(None)));
             i += 1; // '}'
         } else {
             text.push(c);
@@ -1304,6 +1310,7 @@ mod tests {
             callee: Box::new(ident("f")),
             args: vec![num(1), bin(ident("x"), BinaryOperator::Add, num(2))],
             method: RefCell::new(None),
+            displays: RefCell::new(Vec::new()),
         };
         assert_eq!(ast, expected);
     }
@@ -1329,6 +1336,7 @@ mod tests {
                 }),
                 args: vec![],
                 method: RefCell::new(None),
+                displays: RefCell::new(Vec::new()),
             }
         );
     }
@@ -1346,7 +1354,7 @@ mod tests {
             ast,
             AstNode::TemplateString(vec![
                 TemplatePart::Text("Value: ".to_string()),
-                TemplatePart::Expression(ident("value")),
+                TemplatePart::Expression(ident("value"), RefCell::new(None)),
                 TemplatePart::Text("!".to_string()),
             ])
         );

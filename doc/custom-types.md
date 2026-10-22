@@ -179,4 +179,45 @@ A function declared as `function Type.name(...)` belongs to `Type`:
 
 -   Methods are declared at the top level of the file that declares the type, and take no `export`: they are available wherever the type is (`import { Point } from 'geometry.ez'` then `Point.origin()`, or `geometry.Point.origin()`).
 -   A method cannot have the same name as a field of its type.
--   A method cannot change `self` yet (`mut self` is still being designed).
+-   `self` is read-only. A method that changes the value declares `mut self`; the call needs no marker, but the value must be a `var` or a `const` (or a field or element of one), not an `imut`:
+
+    ```ez
+    type Counter = {
+        count: int
+    }
+
+    function Counter.increment(mut self) {
+        self.count += 1
+    }
+
+    var counter: Counter = { count: 0 }
+    counter.increment()
+    print(counter.count) // 1
+    ```
+
+    `mut self` changes the contents of the value, not the value as a whole: `self = ...` is an error. So, as with `const`, the variable keeps the same value, only with different contents.
+
+### Display
+
+`print` and string interpolation show a value with its type's `display` method, when there is one. It is declared as `function Type.display(self): string`:
+
+```ez
+type Person = {
+    name: string
+    age: int
+}
+
+function Person.display(self): string {
+    return `${self.name} (${self.age})`
+}
+
+const ana: Person = { name: 'Ana', age: 30 }
+
+print(ana)             // Ana (30)
+print(`Hi, ${ana}!`)   // Hi, Ana (30)!
+print(ana.debug())     // { name: 'Ana', age: 30 }
+```
+
+-   Every value has `display()` (the text `print` shows) and `debug()` (the structure of the value, as written in code). Without a `display` method, both show the structure, except for strings and standard library errors, whose `display()` is readable (`'abc' is not a valid number`).
+-   Inside a list or another value, the structure is shown: `print([ana])` gives `[{ name: 'Ana', age: 30 }]`.
+-   `debug` cannot be declared: it always shows the structure.

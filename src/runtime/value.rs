@@ -140,6 +140,7 @@ pub struct ModuleValue {
 pub enum Native {
     File(FileHandle),
     DateTime(DateTime),
+    Regex(regex::Regex),
 }
 
 #[derive(Debug)]
@@ -217,6 +218,27 @@ impl Value {
         Value::Object(Rc::new(RefCell::new(Object { fields })))
     }
 
+    /// A copy that shares nothing with the original (lists and objects are copied too).
+    pub fn deep_copy(&self) -> Value {
+        match self {
+            Value::List(items) => Value::list(items.borrow().iter().map(Value::deep_copy).collect()),
+            Value::Object(object) => Value::object(
+                object
+                    .borrow()
+                    .fields
+                    .iter()
+                    .map(|(name, value)| (name.clone(), value.deep_copy()))
+                    .collect(),
+            ),
+            Value::Variant(variant) => Value::Variant(Rc::new(VariantValue {
+                sum: Rc::clone(&variant.sum),
+                name: variant.name.clone(),
+                values: variant.values.iter().map(Value::deep_copy).collect(),
+            })),
+            other => other.clone(),
+        }
+    }
+
     pub fn type_name(&self) -> &'static str {
         match self {
             Value::Int(_) => "int",
@@ -232,6 +254,7 @@ impl Value {
             Value::Native(native) => match &*native.borrow() {
                 Native::File(_) => "File",
                 Native::DateTime(_) => "DateTime",
+                Native::Regex(_) => "Regex",
             },
         }
     }
@@ -340,6 +363,9 @@ impl Value {
                 }
                 Native::DateTime(datetime) => {
                     let _ = write!(out, "{}", datetime);
+                }
+                Native::Regex(regex) => {
+                    let _ = write!(out, "<regex '{}'>", regex.as_str());
                 }
             },
         }

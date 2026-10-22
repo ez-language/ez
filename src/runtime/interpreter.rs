@@ -50,7 +50,6 @@ pub struct Interpreter {
     pub(crate) out: Box<dyn Write>,
     pub(crate) input: Box<dyn BufRead>,
     pub(crate) started: Instant,
-    pub(crate) regex_cache: HashMap<String, regex::Regex>,
     current_module: Option<Rc<ModuleValue>>,
     /// Path of the module being run.
     module_path: PathBuf,
@@ -95,7 +94,6 @@ impl Interpreter {
             out,
             input,
             started: Instant::now(),
-            regex_cache: HashMap::new(),
             current_module: None,
             module_path: PathBuf::new(),
             methods: HashMap::new(),
@@ -370,8 +368,10 @@ impl Interpreter {
                 for part in parts {
                     match part {
                         TemplatePart::Text(s) => text.push_str(s),
-                        TemplatePart::Expression(expression) => {
-                            text.push_str(&self.eval(expression, env)?.display())
+                        TemplatePart::Expression(expression, display) => {
+                            let value = self.eval(expression, env)?;
+                            let display = display.borrow().clone();
+                            text.push_str(&self.display(value, display.as_ref())?)
                         }
                     }
                 }
@@ -400,9 +400,15 @@ impl Interpreter {
                 self.unary(op, value)
             }
             AstNode::BinaryOp { left, op, right } => self.eval_binary(left, *op, right, env),
-            AstNode::Call { callee, args, method } => {
+            AstNode::Call {
+                callee,
+                args,
+                method,
+                displays,
+            } => {
                 let method = method.borrow().clone();
-                self.eval_call(callee, args, method, env)
+                let displays = displays.borrow().clone();
+                self.eval_call(callee, args, method, &displays, env)
             }
             AstNode::MutArg(_) => Err(self.error("'mut' is only used before a call argument")),
             AstNode::Index { target, index } => {
@@ -457,6 +463,7 @@ impl Interpreter {
             }
             AstNode::For {
                 variable,
+                is_mut,
                 iterable,
                 body,
             } => {
@@ -479,7 +486,8 @@ impl Interpreter {
                 };
                 for item in items {
                     let scope = Env::child(env);
-                    scope.define(variable, item);
+                    // A `for mut` variable is a copy: changing it does not change the list.
+                    scope.define(variable, if *is_mut { item.deep_copy() } else { item });
                     if !self.exec_loop_body(body, &scope)? {
                         break;
                     }
@@ -974,6 +982,7 @@ impl Interpreter {
         callee: &AstNode,
         args: &[AstNode],
         method: Option<MethodRef>,
+        displays: &[Option<MethodRef>],
         env: &Rc<Env>,
     ) -> Exec<Value> {
         // A method (`person.greet()`) or an associated function (`Person.create()`).
@@ -983,28 +992,61 @@ impl Interpreter {
                 None => return Err(self.error(format!("method '{}' not found", method.key))),
             };
             let mut values = Vec::new();
+            let mut places = Vec::new();
             if method.has_self {
                 if let AstNode::Member { object, .. } = callee.unlocated() {
-                    values.push(self.eval(object, env)?);
+                    // `mut self`: the value is stored back where it came from, like a `mut`
+                    // argument.
+                    if closure.params[0].is_mut {
+                        let (value, place) = self.eval_place(object, env)?;
+                        values.push(value);
+                        places.push((0, place));
+                    } else {
+                        values.push(self.eval(object, env)?);
+                    }
                 }
             }
             let offset = values.len();
-            let (rest, places) = self.eval_args(args, env)?;
+            let (rest, arg_places) = self.eval_args(args, env)?;
             values.extend(rest);
-            return self.call_with_places(&Value::Function(closure), values, places, offset, env);
+            places.extend(arg_places.into_iter().map(|(i, place)| (i + offset, place)));
+            return self.call_with_places(&Value::Function(closure), values, places, env);
         }
         if let AstNode::Member { object, name } = callee.unlocated() {
             let object = self.eval(object, env)?;
             let (args, places) = self.eval_args(args, env)?;
             if !places.is_empty() {
                 let function = self.member(&object, name)?;
-                return self.call_with_places(&function, args, places, 0, env);
+                return self.call_with_places(&function, args, places, env);
             }
             return self.call_method(&object, name, args);
         }
         let callee = self.eval(callee, env)?;
-        let (args, places) = self.eval_args(args, env)?;
-        self.call_with_places(&callee, args, places, 0, env)
+        let (mut args, places) = self.eval_args(args, env)?;
+        // `print(person)`: values whose type declares `display` are shown with it.
+        for (arg, display) in args.iter_mut().zip(displays) {
+            if display.is_some() {
+                let value = std::mem::replace(arg, Value::Void);
+                *arg = Value::str(&self.display(value, display.as_ref())?);
+            }
+        }
+        self.call_with_places(&callee, args, places, env)
+    }
+
+    /// Text of a value for `print` and interpolation: its type's `display` method, if declared.
+    fn display(&mut self, value: Value, display: Option<&MethodRef>) -> Exec<String> {
+        let method = match display {
+            Some(method) => method,
+            None => return Ok(value.display()),
+        };
+        let closure = match self.methods.get(&(method.module.clone(), method.key.clone())) {
+            Some(closure) => Rc::clone(closure),
+            None => return Err(self.error(format!("method '{}' not found", method.key))),
+        };
+        match self.call_closure(&closure, vec![value])? {
+            Value::Str(text) => Ok(text.to_string()),
+            other => Ok(other.display()),
+        }
     }
 
     /// The argument values, and where each `mut` argument came from (by argument position).
@@ -1061,14 +1103,13 @@ impl Interpreter {
         Ok(())
     }
 
-    /// Calls `callee`; then stores the final value of each `mut` parameter back where its
-    /// argument came from. `offset` is the number of values before the arguments (`self`).
+    /// Calls `callee`; then stores the final value of each `mut` parameter (by position) back
+    /// where its argument came from.
     fn call_with_places(
         &mut self,
         callee: &Value,
         args: Vec<Value>,
         places: Vec<(usize, Place)>,
-        offset: usize,
         env: &Rc<Env>,
     ) -> Exec<Value> {
         let closure = match callee {
@@ -1077,7 +1118,7 @@ impl Interpreter {
         };
         let (value, scope) = self.run_closure(closure, args)?;
         for (i, place) in places {
-            let param = &closure.params[i + offset].name;
+            let param = &closure.params[i].name;
             if let Some(final_value) = scope.get_local(param) {
                 self.set_place(place, final_value, env)?;
             }
@@ -1143,6 +1184,15 @@ impl Interpreter {
     }
 
     fn call_method(&mut self, object: &Value, name: &str, args: Vec<Value>) -> Exec<Value> {
+        // Every value has `display()` and `debug()`, unless a field of an object has the name.
+        let is_field = matches!(object, Value::Object(fields) if fields.borrow().get(name).is_some());
+        if !is_field && !matches!(object, Value::Module(_)) {
+            match name {
+                "display" => return Ok(Value::str(&object.display())),
+                "debug" => return Ok(Value::str(&object.repr())),
+                _ => {}
+            }
+        }
         match object {
             Value::Module(_) => {
                 let member = self.member(object, name)?;
@@ -1161,10 +1211,6 @@ impl Interpreter {
                 self.call_value(&member, args)
             }
             Value::Native(native) => stdlib::native_method(self, native, name, args),
-            Value::Variant(variant) if name == "message" => match stdlib::error_message(variant) {
-                Some(message) => Ok(Value::str(&message)),
-                None => Err(self.error(format!("'{}' has no method 'message'", variant.sum.name))),
-            },
             Value::Variant(variant) if variant.sum.name == "Result" && name == "mapErr" => {
                 if variant.name != "Err" {
                     return Ok(object.clone());

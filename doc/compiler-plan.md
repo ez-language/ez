@@ -163,7 +163,9 @@ person.greet()
 
 A function prefixed with its type but without `self` is an **associated function**, called on the type: `function Person.create(name: string): Person`, called as `Person.create('John')` (e.g. for constructors).
 
-Implemented, except `mut self` (see [Open decisions](#open-decisions)); see [Custom Types](custom-types.md#methods).
+A method that changes its value declares **`mut self`**. The call does not repeat the marker (`counter.increment()`), because the method is already called on the variable; the value must be a `var` or a `const` (or a field or element of one), never an `imut`. `mut self` changes the contents, but cannot replace the value (`self = ...` is an error), which is what makes calling it on a `const` consistent.
+
+Implemented; see [Custom Types](custom-types.md#methods).
 
 ### Value semantics details
 
@@ -179,6 +181,8 @@ Implemented, except `mut self` (see [Open decisions](#open-decisions)); see [Cus
     An `imut` variable can never be passed as `mut`, and a `const` neither (the function could replace the value). Parameters without `mut` (and `self`) are read-only. Implemented; see [Functions](functions.md#mut-parameters).
 -   **Move-only types**, including user types: values that cannot be copied (resources). Assigning moves them, and using the previous variable is a compile error.
 -   **Only move-only types can have a `drop`** method, called automatically when the value is dropped. A copyable type with `drop` would run it once per copy.
+-   **Move-only is implicit**: a type is move-only when it declares a `drop` method, or when it has a field of a move-only type (a type holding a `File` cannot be copied either). There is no separate marker. Not implemented yet: it comes with value semantics in the interpreter.
+-   **`for` and `match` variables are `imut`**: `for x in items` gives an imut `x`; `for mut x in items` allows changing it (a copy: the list does not change). Variables bound by `match` patterns are always imut. Implemented.
 -   **Intentionally shared structures** (graphs, caches) use indices into a list ("arenas"). An explicit shared type may come later, only if arenas prove insufficient.
 
 The other items are not implemented yet (phase 1).
@@ -193,7 +197,7 @@ The other items are not implemented yet (phase 1).
     f = file.open('notes.txt', Read)?
     ```
 
--   `print(error)` (and string interpolation) shows a human-readable message for standard library errors, e.g. `file 'notes.txt' not found` instead of `NotFound('notes.txt')`. The same text is available as `error.message()`.
+-   `print(error)` (and string interpolation) shows a human-readable message for standard library errors, e.g. `file 'notes.txt' not found` instead of `NotFound('notes.txt')`. The same text is available as `error.display()`.
 
 Both are implemented.
 
@@ -308,7 +312,14 @@ type MathError = {
 
 `time` has no error type. `input()` keeps returning `Option[string]`.
 
-`regex` will get `RegexError = { InvalidPattern(pattern: string, message: string) }` together with `regex.compile` (see [Open decisions](#open-decisions)). Until then, an invalid pattern panics.
+```ez
+// regex
+type RegexError = {
+    InvalidPattern(pattern: string, message: string)
+}
+```
+
+`regex.compile(pattern)` returns `Result[Regex, RegexError]`, and the methods of `Regex` (`test`, `find`, `findAll`, `replace`, `replaceAll`, `split`) cannot fail. More variants may be added. Implemented.
 
 ### No NaN, no infinity
 
@@ -357,7 +368,7 @@ A compiler is a large program, with many data structures and many operations tha
     -   `substring`/slicing, `startsWith`, `indexOf` and a string builder;
     -   efficient indexing (`s[i]` is O(n) today).
 4.  **Error propagation**: the `?` operator (implemented).
-5.  **Methods on types** (`Type.method()`): implemented, except `mut self`.
+5.  **Methods on types** (`Type.method()`, `mut self`): implemented.
 6.  **Complete type inference**: today the checker tolerates unresolved types (`x = None`, `[]`). Code generation needs every type resolved, which requires real unification.
 7.  **System access**:
     -   command-line arguments;
@@ -398,11 +409,15 @@ Notes:
 
 ## Open decisions
 
-1.  **Mutating methods**: a method that modifies its value declares `mut self` (`function Counter.increment(mut self)`); it can only be called on `var` and `const` variables. Recommended: the call does not repeat the marker (`counter.increment()`, `list.push(x)`), because the method is already called on the variable.
-2.  ~~**Functions without `self`**~~: decided and implemented (associated functions, `Person.create('John')`).
-3.  **Declaring a move-only type**: the syntax for user types (e.g. a marker on the `type` declaration).
-4.  **Readable display for user types**: whether `print` and interpolation use a `message(self): string` method of user types too (a naming convention, like `drop`), and a `repr(value)` function to get the structural form (`NotFound('notes.txt')`) when debugging.
-5.  **`regex.compile(pattern) -> Result[Regex, RegexError]`**, with infallible methods on `Regex`: depends on methods.
-6.  **Generics**: `function first[T](items: T[]): Option[T]` and `type Pair[A, B] = { ... }`; whether type parameters need constraints is still being considered.
-7.  **The `for` variable as `imut`**: each iteration already gets a new variable; making it `imut` turns an assignment to it (almost always a mistake) into a compile error. The same could apply to the variables bound by `match` patterns.
-8.  **Phase 1 APIs**: collections (`push`, `pop`, slicing, maps with any key type, sets), text (a character type, slicing, a string builder), system (command-line arguments, exit code, environment variables, processes) and FFI (`extern function`).
+1.  **Generics**: `function first[T](items: T[]): Option[T]` and `type Pair[A, B] = { ... }`; whether type parameters need constraints is still being considered. Left for last, as it is the most complex.
+2.  **Phase 1 APIs**: collections (`push`, `pop`, slicing, maps with any key type, sets), text (a character type, slicing, a string builder), system (command-line arguments, exit code, environment variables, processes) and FFI (`extern function`). Depends on generics.
+3.  **More `RegexError` variants**, if `InvalidPattern` proves too coarse.
+
+Decided:
+
+-   **Mutating methods**: `mut self`, with no marker at the call (see [Methods](#methods)).
+-   **Functions without `self`**: associated functions, `Person.create('John')`.
+-   **Move-only types**: implicit, from `drop` (see [Value semantics details](#value-semantics-details)).
+-   **Display**: `display()` is readable (a `display(self): string` method of the type, when declared) and is what `print` and interpolation use; `debug()` shows the structure (see [Custom Types](custom-types.md#display)).
+-   **`regex.compile`**, with `RegexError = { InvalidPattern(pattern, message) }` (see [Typed errors in the standard library](#typed-errors-in-the-standard-library)).
+-   **`for` and `match` variables are imut**, with `for mut` to opt out.

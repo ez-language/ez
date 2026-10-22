@@ -181,7 +181,8 @@ pub struct MatchArm {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TemplatePart {
     Text(String),
-    Expression(AstNode),
+    /// `${value}`; the type checker records the `display` method of its type, if it has one.
+    Expression(AstNode, RefCell<Option<MethodRef>>),
 }
 
 /// Variant that wraps an error propagated by `?`: `File` in `Err(File(error))`, possibly from
@@ -224,6 +225,8 @@ pub enum AstNode {
         args: Vec<AstNode>,
         /// Filled by the type checker when the call is a method or an associated function.
         method: RefCell<Option<MethodRef>>,
+        /// For `print` and `string`: the `display` method of each argument's type, if any.
+        displays: RefCell<Vec<Option<MethodRef>>>,
     },
     /// `mut items` as a call argument: the callee may modify the variable.
     MutArg(Box<AstNode>),
@@ -258,8 +261,10 @@ pub enum AstNode {
         condition: Box<AstNode>,
         body: Box<AstNode>,
     },
+    /// `for x in items` (`x` is imut) or `for mut x in items`.
     For {
         variable: String,
+        is_mut: bool,
         iterable: Box<AstNode>,
         body: Box<AstNode>,
     },

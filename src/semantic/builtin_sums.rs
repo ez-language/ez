@@ -104,6 +104,12 @@ pub const BUILTIN_SUMS: &[BuiltinSum] = &[
             ("InvalidDate", TEXT),
         ],
     },
+    BuiltinSum {
+        name: "RegexError",
+        module: Some("regex"),
+        params: 0,
+        variants: &[("InvalidPattern", &[("pattern", "string"), ("message", "string")])],
+    },
 ];
 
 pub fn builtin_sum(name: &str) -> &'static BuiltinSum {
@@ -122,7 +128,7 @@ pub fn stdlib_functions(module: &str) -> &'static [&'static str] {
         "math" => &["abs", "sqrt", "pow", "floor", "ceil", "round"],
         "http" => &["get", "post", "put", "delete"],
         "json" => &["parse", "stringify", "get", "asString", "asInt", "asFloat", "asBool"],
-        "regex" => &["match", "search", "findAll", "replace"],
+        "regex" => &["compile"],
         _ => &[],
     }
 }

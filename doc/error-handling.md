@@ -19,7 +19,7 @@ match (int('42')) {
 }
 ```
 
-Standard library errors have a readable message: printing or interpolating them shows it, and `error.message()` returns it. A `Result` itself keeps its structural form:
+Standard library errors have a readable message: printing or interpolating them shows it, and `error.display()` returns it (`error.debug()` gives the structure, `InvalidNumber('abc')`). A `Result` itself keeps its structural form:
 
 ```ez
 match (int('abc')) {

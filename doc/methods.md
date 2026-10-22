@@ -33,6 +33,13 @@ match (int('42')) {
 }
 ```
 
+## Methods of Every Value
+
+| Method        | Description                                                        | Example                                 |
+| ------------- | ------------------------------------------------------------------ | --------------------------------------- |
+| `x.display()` | The text `print` shows (readable, see [Display](custom-types.md#display)) | `int('a')` error → `'a' is not a valid number` |
+| `x.debug()`   | The structure of the value, as written in code                     | `'hi'.debug() → "'hi'"`                 |
+
 ## String Methods
 
 | Method                  | Description                                                               | Example                                 |

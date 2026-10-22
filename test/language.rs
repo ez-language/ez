@@ -940,7 +940,7 @@ fn readable_error_messages() {
             Ok(_) => print('opened?')
             Err(error) => {
                 print(error)
-                print(`failed: ${error}`, error.message().length() > 0)
+                print(`failed: ${error}`, error.display().length() > 0)
             }
         }
         match (int('abc')) {
@@ -953,15 +953,15 @@ fn readable_error_messages() {
         }
         match (math.sqrt(-1)) {
             Ok(_) => print('?')
-            Err(error) => print(error.message())
+            Err(error) => print(error.display(), '|', error.debug())
         }
         print(int('abc')) // a Result keeps its structural form
     "#;
     assert_eq!(
         run(source),
-        "file '/nonexistent/notes.txt' not found\nfailed: file '/nonexistent/notes.txt' not found true\n'abc' is not a valid number\ninvalid JSON at line 1, column 4: unexpected end of input\nthe result is not a real number (it is complex)\nErr(InvalidNumber('abc'))\n"
+        "file '/nonexistent/notes.txt' not found\nfailed: file '/nonexistent/notes.txt' not found true\n'abc' is not a valid number\ninvalid JSON at line 1, column 4: unexpected end of input\nthe result is not a real number (it is complex) | Complex\nErr(InvalidNumber('abc'))\n"
     );
-    assert_error("type E = { Bad }\nprint(Bad.message())", "has no method 'message'");
+    assert_error("print(int('a').message())", "has no method 'message'");
 }
 
 #[test]
@@ -1297,42 +1297,41 @@ fn stdlib_regex() {
     let source = r#"
         import regex
 
-        print(regex.match('^[a-z]+$', 'hello')) // true
-        print(regex.match('^[a-z]+$', '123')) // false
-
-        result = regex.search('[0-9]+', 'Order number: 12345')
-
-        if (result is Some) {
-            print(result.value.value) // 12345
+        match (regex.compile('[0-9]+')) {
+            Ok(digits) => {
+                print(digits.test('abc123'), digits.test('abc'))
+                match (digits.find('Order number: 12345')) {
+                    Some(found) => print(found.value, found.start, found.end)
+                    None => print('no number')
+                }
+                for found in digits.findAll('a1b22c333') {
+                    print(found.value)
+                }
+                print(digits.replace('a1b2', '#'), digits.replaceAll('a1b2', '#'))
+                print(digits.split('a1b22c'))
+                print(digits.find('abc'))
+            }
+            Err(error) => print(error)
         }
 
-        results = regex.findAll('[a-z]+', 'abc 123 def')
-
-        for word in results {
-            print(word.value)
+        match (regex.compile('(abc')) {
+            Ok(_) => print('valid?')
+            Err(error) => print(error, '|', error.debug())
         }
 
-        print(regex.replace('[0-9]+', '#', 'abc123def456')) // abc#def#
-
-        found = regex.search('abc', '123abc456')
-
-        if (found is Some) {
-            m = found.value
-
-            print(m.value) // abc
-            print(m.start) // 3
-            print(m.end) // 6
+        function countWords(text: string): Result[int, regex.RegexError] {
+            const word = regex.compile('[a-z]+')?
+            return Ok(word.findAll(text).length())
         }
-        print(regex.search('x', 'abc'))
+
+        print(countWords('hello big world'))
     "#;
     assert_eq!(
         run(source),
-        "true\nfalse\n12345\nabc\ndef\nabc#def#\nabc\n3\n6\nNone\n"
+        "true false\n12345 14 19\n1\n22\n333\na#b2 a#b#\n['a', 'b', 'c']\nNone\n\
+         invalid regular expression '(abc': unclosed group | InvalidPattern('(abc', 'unclosed group')\nOk(3)\n"
     );
-    assert_error(
-        "import regex\nresult = regex.search('a', 'a')\nprint(result.value)",
-        "check the variant with 'is'",
-    );
+    assert_error("import regex\nprint(regex.match('a', 'a'))", "has no member 'match'");
 }
 
 #[test]
@@ -1463,7 +1462,8 @@ fn methods_and_associated_functions() {
 
     let p = "type P = { name: string }\n";
     assert_error(&format!("{}function P.hi(self) {{ self.name = 'a' }}", p), "parameters can only be modified when declared 'mut'");
-    assert_error(&format!("{}function P.hi(mut self) {{}}", p), "'mut self' is not available yet");
+    assert_error(&format!("{}function P.debug(self) {{}}", p), "every type has 'debug()'");
+    assert_error(&format!("{}function P.display(self): int {{ 1 }}", p), "must be declared as 'function P.display(self): string'");
     assert_error(&format!("{}function P.hi(self: P) {{}}", p), "'self' has no type annotation");
     assert_error(&format!("{}function P.name(self) {{}}", p), "same name as a field");
     assert_error(&format!("{}function Q.hi(self) {{}}", p), "cannot declare 'Q.hi'");
@@ -1568,4 +1568,103 @@ fn mut_parameters() {
         &format!("{}function outer() {{\nvar b = 1\nfunction inner() {{ f(mut b) }}\n}}", f),
         "functions capture a read-only copy",
     );
+}
+
+#[test]
+fn mut_self() {
+    let source = r#"
+        type Counter = {
+            count: int
+        }
+
+        function Counter.increment(mut self) {
+            self.count += 1
+        }
+
+        function Counter.addTwice(mut self) {
+            self.increment()
+            self.increment()
+        }
+
+        var counter: Counter = { count: 0 }
+        counter.increment()
+        const fixed: Counter = { count: 10 }
+        fixed.addTwice()
+        var counters: Counter[] = [{ count: 5 }]
+        counters[0].increment()
+        print(counter.count, fixed.count, counters[0].count)
+    "#;
+    assert_eq!(run(source), "1 12 6\n");
+
+    let c = "type C = { count: int }\nfunction C.inc(mut self) { self.count += 1 }\n";
+    assert_error(&format!("{}imut c: C = {{ count: 0 }}\nc.inc()", c), "cannot call 'C.inc' on 'c', as it changes the value: it is imut");
+    assert_error(&format!("{}function f(c: C) {{ c.inc() }}", c), "parameters can only be modified");
+    assert_error(&format!("{}function C.peek(self) {{ self.inc() }}", c), "cannot call 'C.inc' on 'self'");
+    assert_error(
+        &format!("{}function C.make(): C {{ return {{ count: 0 }} }}\nC.make().inc()", c),
+        "call it on a variable, a field or an element",
+    );
+    assert_error(
+        &format!("{}function C.reset(mut self) {{ self = {{ count: 0 }} }}", c),
+        "'mut self' can change its fields, not replace the value",
+    );
+}
+
+#[test]
+fn display_and_debug() {
+    let source = r#"
+        type Person = {
+            name: string
+            age: int
+        }
+
+        function Person.display(self): string {
+            return `${self.name} (${self.age})`
+        }
+
+        type Shape = {
+            Circle(radius: float)
+            Square(side: float)
+        }
+
+        function Shape.display(self): string {
+            return match (self) {
+                Circle(r) => `circle of radius ${r}`
+                Square(s) => `square of side ${s}`
+            }
+        }
+
+        const ana: Person = { name: 'Ana', age: 30 }
+        print(ana)
+        print(`Hi, ${ana}!`)
+        print(string(ana), ana.display(), ana.debug())
+        print(Circle(1.0), Circle(1.0).debug())
+        print([ana])
+        print('text'.debug(), 'text'.display(), [1, 2].debug())
+    "#;
+    assert_eq!(
+        run(source),
+        "Ana (30)\nHi, Ana (30)!\nAna (30) Ana (30) { name: 'Ana', age: 30 }\n\
+         circle of radius 1.0 Circle(1.0)\n[{ name: 'Ana', age: 30 }]\n'text' text [1, 2]\n"
+    );
+}
+
+#[test]
+fn loop_and_match_variables_are_imut() {
+    assert_error("for x in [1, 2] { x = 3 }", "cannot modify 'x': the 'for' variable is imut (use 'for mut' to change it)");
+    assert_error("for row in [[1]] { row[0] = 3 }", "the 'for' variable is imut");
+    assert_error(
+        "match (Some(1)) {\nSome(n) => { n = 2 }\nNone => {}\n}",
+        "cannot modify 'n': variables bound by 'match' are imut",
+    );
+    // `for mut` changes a copy: the list keeps its values.
+    let source = r#"
+        var rows = [[1, 2], [3, 4]]
+        for mut row in rows {
+            row[0] = 0
+            print(row)
+        }
+        print(rows)
+    "#;
+    assert_eq!(run(source), "[0, 2]\n[0, 4]\n[[1, 2], [3, 4]]\n");
 }

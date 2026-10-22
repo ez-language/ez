@@ -42,7 +42,7 @@ type FileError = {
 }
 ```
 
-Printing an error shows a readable message, also available as `error.message()`:
+Printing an error shows a readable message, also available as `error.display()`:
 
 ```ez
 match (file.open('missing.txt', file.Read)) {
