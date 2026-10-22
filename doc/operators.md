@@ -4,7 +4,7 @@
 
 | Operator | Description                       |
 | -------- | --------------------------------- |
-| `+`      | Addition or concat                |
+| `+`      | Addition                          |
 | `-`      | Subtraction                       |
 | `*`      | Multiplication                    |
 | `/`      | Division                          |
@@ -43,29 +43,26 @@ To handle the `**` cases instead of panicking, use `math.pow`, which returns a `
 | `<`      | Less than                                                  |
 | `>=`     | Greater than or equal                                      |
 | `<=`     | Less than or equal                                         |
-| `is`     | Identity comparison                                        |
-| `in`     | Membership check (checks if an element is in a collection) |
+| `is`     | Variant check (whether a value is a given variant)         |
+| `in`     | Membership check (whether an element is in a collection)   |
 
-Examples:
-
--  `is`:
+`==` compares values: two lists or objects are equal when their contents are equal.
 
 ```ez
 const a = { name: 'Ana', age: 30 }
 const b = { name: 'Ana', age: 30 }
 
-a == b  // true  — fields are equal
-a is b  // false — different objects in memory
+a == b  // true: the fields are equal
 ```
 
--  `in`:
+`in` checks whether an element is in a list, or a text in a string:
 
 ```ez
 'a' in 'banana'  // true
 2 in [1, 2, 3]   // true
 ```
 
-`is` also checks the variant of a sum type value:
+`is` checks the variant of a sum type value. Inside the `if`, the fields of the variant can be used:
 
 ```ez
 result = Some(1)
@@ -83,12 +80,10 @@ if (result is Some) {
 | `or`     | Logical OR  |
 | `not`    | Logical NOT |
 
-Examples:
-
--  `not`:
-
 ```ez
-if not (age > 18) { ... }
+if (age >= 18 and not hasTicket) {
+	print('buy a ticket first')
+}
 ```
 
 ## Assignment Operators

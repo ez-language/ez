@@ -1,8 +1,10 @@
 # Custom Types
 
+Custom types are declared with `type`. This page covers shape types (named fields), dictionaries (index signatures), intersections, and the methods of a type. Types with variants are covered in [Sum Types](sum-types.md).
+
 ## Shape Types
 
-Types with fixed named fields, useful for representing entities with known structures.
+Types with fixed named fields, for values with a known structure.
 
 ```ez
 type Person = {
@@ -60,7 +62,7 @@ fahrenheit = celsius // Error! Celsius is not Fahrenheit
 
 ## Index Signatures
 
-Types with dynamic keys, where keys follow a pattern and point to values ​​of the same type.
+Types with dynamic keys: every key is a `string`, and every value has the same type. They work as dictionaries.
 
 ```ez
 type Dictionary = {
@@ -71,30 +73,34 @@ translations: Dictionary = {
     'hello': 'olá',
     'world': 'mundo'
 }
+
+print(translations['hello']) // olá
+translations['thanks'] = 'obrigado'
 ```
+
+Reading a key that does not exist panics. To go through the keys, use `for key in translations`.
 
 ## Type Union
 
-`ez` does not support untagged type unions (e.g. `string | int`).
+ez does not support untagged type unions (e.g. `string | int`).
 
-When a value can be one of several types, use a sum type (tagged union).
-Each variant is explicitly tagged, so the compiler can verify exhaustiveness and the programmer always knows which variant they are handling.
+When a value can be one of several types, use a sum type (tagged union). Each variant is explicitly tagged, so the compiler can verify exhaustiveness and the programmer always knows which variant they are handling.
 
 ```ez
-type Result = string | int // Error! Untagged union is not allowed
+type Value = string | int // Error! Untagged union is not allowed
 
-// Tagged union — each variant is named
-type Result = {
+// Tagged union: each variant is named
+type Value = {
     Text(value: string)
     Num(value: int)
 }
 ```
 
-This ensures that "it can be A or B" always comes with a tag you can match on. There is no "it's one of them, but I don't know which" — the type system forbids it.
+This ensures that "it can be A or B" always comes with a tag you can match on. There is no "it's one of them, but I don't know which": the type system forbids it.
 
 ## Type Intersection
 
-A type defined with intersection (`&`) is a flat alias that merges fields — it does not create an "is-a" relationship.
+A type defined with intersection (`&`) merges the fields of its parts into a new type:
 
 ```ez
 type Animal = {
@@ -104,9 +110,26 @@ type Animal = {
 type Dog = Animal & {
     breed: string
 }
+
+const rex: Dog = { name: 'Rex', breed: 'Beagle' }
 ```
 
-## Subtyping
+## No Subtyping
+
+ez has no subtyping. A type is not accepted where another type is expected, even when it has all of its fields: `Dog` above has the fields of `Animal`, but it is not an `Animal`.
+
+```ez
+function greet(animal: Animal) {
+    print(animal.name)
+}
+
+greet(rex) // Error! argument 1 must be Animal, found Dog
+greet({ name: rex.name }) // Ok
+```
+
+## Methods
+
+A function declared as `function Type.name(...)` belongs to `Type`. With `self` as the first parameter, it is a **method**, called on a value:
 
 ```ez
 type Person = {
@@ -144,60 +167,67 @@ const rect: Rect = {
 print(rect.area()) // 12
 ```
 
-### Methods
+`self` has no type annotation (it is always the type) and, like every parameter, it is read-only.
 
-A function declared as `function Type.name(...)` belongs to `Type`:
+### Associated Functions
 
--   With `self` as the first parameter, it is a method: `value.name(...)`. `self` has no type annotation (it is always the type) and, like every parameter, it is read-only.
--   Without `self`, it is an associated function, called on the type: `Type.name(...)`. It is useful for constructors:
+Without `self`, the function is an **associated function**, called on the type: `Type.name(...)`. It is useful for constructors:
 
-    ```ez
-    function Rect.square(side: int): Rect {
-        return { width: side, height: side }
+```ez
+function Rect.square(side: int): Rect {
+    return { width: side, height: side }
+}
+
+print(Rect.square(3).area()) // 9
+```
+
+### Methods of Sum Types
+
+Sum types can have methods too:
+
+```ez
+type Shape = {
+    Circle(radius: float)
+    Square(side: float)
+}
+
+function Shape.area(self): float {
+    return match (self) {
+        Circle(r) => 3.14 * r * r
+        Square(s) => s * s
     }
+}
 
-    print(Rect.square(3).area()) // 9
-    ```
+print(Square(2.0).area()) // 4.0
+```
 
--   Sum types can have methods too:
+### Methods That Change the Value
 
-    ```ez
-    type Shape = {
-        Circle(radius: float)
-        Square(side: float)
-    }
+A method that changes its value declares `mut self`. The call needs no marker, but the value must be a `var` or a `const` (or a field or element of one), not an `imut`:
 
-    function Shape.area(self): float {
-        return match (self) {
-            Circle(r) => 3.14 * r * r
-            Square(s) => s * s
-        }
-    }
+```ez
+type Counter = {
+    count: int
+}
 
-    print(Square(2.0).area()) // 4.0
-    ```
+function Counter.increment(mut self) {
+    self.count += 1
+}
+
+var counter: Counter = { count: 0 }
+counter.increment()
+print(counter.count) // 1
+```
+
+`mut self` changes the contents of the value, not the value as a whole: `self = ...` is an error. So, as with `const`, the variable keeps the same value, only with different contents.
+
+### Rules
 
 -   Methods are declared at the top level of the file that declares the type, and take no `export`: they are available wherever the type is (`import { Point } from 'geometry.ez'` then `Point.origin()`, or `geometry.Point.origin()`).
 -   A method cannot have the same name as a field of its type.
--   `self` is read-only. A method that changes the value declares `mut self`; the call needs no marker, but the value must be a `var` or a `const` (or a field or element of one), not an `imut`:
+-   A method with `self` is called on a value (`person.greet()`), and an associated function on the type (`Person.create()`); the other way around is an error.
 
-    ```ez
-    type Counter = {
-        count: int
-    }
-
-    function Counter.increment(mut self) {
-        self.count += 1
-    }
-
-    var counter: Counter = { count: 0 }
-    counter.increment()
-    print(counter.count) // 1
-    ```
-
-    `mut self` changes the contents of the value, not the value as a whole: `self = ...` is an error. So, as with `const`, the variable keeps the same value, only with different contents.
-
-### Display
+## Display
 
 `print` and string interpolation show a value with its type's `display` method, when there is one. It is declared as `function Type.display(self): string`:
 

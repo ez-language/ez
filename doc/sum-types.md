@@ -4,12 +4,13 @@ Sum types (also known as tagged unions or variant types) allow a value to be one
 
 ## Defining a Sum Type
 
-Use the `type` keyword to define a sum type with multiple variants:
+Use the `type` keyword to define a sum type with multiple variants. A variant can have fields (`Success(user: string)`) or none (`Guest`):
 
 ```ez
-type Result = {
-	Ok(value: string)
-	Err(message: string)
+type Login = {
+	Success(user: string)
+	Failure(message: string)
+	Guest
 }
 ```
 
@@ -18,17 +19,20 @@ type Result = {
 You can use pattern matching with `match` to handle each variant of a sum type.
 
 ```ez
-function handleResult(result: Result) {
-	match (result) {
-		Ok(value) => print(`Success: ${value}`)
-		Err(message) => print(`Error: ${message}`)
+function describe(login: Login) {
+	match (login) {
+		Success(user) => print(`Welcome, ${user}`)
+		Failure(message) => print(`Error: ${message}`)
+		Guest => print('Hello, guest')
 	}
 }
+
+describe(Success('Ana')) // Welcome, Ana
 ```
 
 ## Built-in Sum Types
 
-`Option[T]` and `Result[T, E]` are provided by the language and behave as if they were declared like this (user-defined types cannot take type parameters):
+`Option[T]` and `Result[T, E]` are provided by the language and behave as if they were declared like this (user-defined types cannot take type parameters yet):
 
 ```ez
 type Option[T] = {
@@ -42,7 +46,7 @@ type Result[T, E] = {
 }
 ```
 
-Use `is` to check a variant; inside the `if`, its fields can be accessed directly:
+Use `is` to check a variant. Inside the `if`, its fields can be accessed directly:
 
 ```ez
 name: Option[string] = Some('Ana')
@@ -81,6 +85,6 @@ function area(shape: Shape): float {
 }
 ```
 
-Sum types are **exhaustive**: all possible variants must be handled unless a wildcard is used.
+A `match` on a sum type is **exhaustive**: every variant must be handled, unless a wildcard is used. Adding a variant to a type makes every `match` that does not handle it a compile error, so no case is forgotten.
 
-They are ideal for representing safe and expressive data flows without relying on `null` or `undefined`.
+Sum types represent "one of these cases" safely, without `null` or `undefined`. Sum types can also have methods (see [Custom Types](custom-types.md#methods)).

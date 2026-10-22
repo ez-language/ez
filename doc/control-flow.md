@@ -14,7 +14,7 @@ if (age > 18) {
 }
 ```
 
-`if` can also be used as an expression.
+`if` can also be used as an expression. It then needs an `else`, and both branches must have the same type:
 
 ```ez
 const label: string = if (age > 18) { 'Adult' } else { 'Minor' }
@@ -22,21 +22,20 @@ const label: string = if (age > 18) { 'Adult' } else { 'Minor' }
 print(label)
 ```
 
-`ez` does not have else if. For multiple branches, use a match
-expression with guard conditions.
+ez has no `else if`. For more than two branches, use a [`match` with guards](#guards).
 
 ## Loop
 
 ### `for` Loop
 
-The `for` loop is used to repeat a block of code over a range of numbers.
+The `for` loop runs a block once for each item of a list, each character of a string, or each key of a dictionary.
 
-#### How `range` Works
+#### Counting with `range`
 
-The `range(start, end, step)` function generates integers from `start` up to (but not including) `end`.
+`range(start, end)` gives the integers from `start` up to, but not including, `end` (see [`range`](builtins.md#range) for the other forms):
 
 ```ez
-range(0, 5) // Produces: 0, 1, 2, 3, 4
+range(0, 5) // [0, 1, 2, 3, 4]
 ```
 
 #### Basic Syntax
@@ -55,7 +54,7 @@ for i in range(10) {
 
 This prints numbers from 0 to 9.
 
-#### Loop through a list
+#### Going Through a List
 
 ```ez
 names: string[] = ['Anna', 'Claire', 'Leon']
@@ -71,7 +70,7 @@ for name in names {
 }
 ```
 
-#### The loop variable
+#### The Loop Variable
 
 The loop variable is `imut`: assigning to it, or changing its contents, is an error. With `for mut`, it can be changed, but it is a copy: the list does not change.
 
@@ -145,13 +144,7 @@ match (result) {
 }
 ```
 
-Each arm follows the pattern:
-
-```ez
-Pattern => Expression
-```
-
-Arms are matched in order, and the first one that matches will be executed. Pattern matching supports destructuring and variant matching for sum types. The variables bound by a pattern (`value`, `error`) are `imut`.
+Each arm has the form `pattern => expression`. Arms are tried in order, and the first one that matches runs. Patterns can match variants, take their fields apart (`Ok(value)`), and be nested (`Err(NotFound(path))`). The variables bound by a pattern (`value`, `error`) are `imut`.
 
 ```ez
 match (user) {
@@ -160,7 +153,7 @@ match (user) {
 }
 ```
 
-The `match` expression is exhaustive, and must handle all possible variants unless a wildcard (`_`) is used:
+A `match` is exhaustive: it must handle every possible variant, unless a wildcard (`_`) is used:
 
 ```ez
 match (option) {
@@ -169,7 +162,7 @@ match (option) {
 }
 ```
 
-A `match` expression can also be assigned to a variable.
+A `match` is also an expression, so its value can be assigned to a variable:
 
 ```ez
 const label: string = match (result) {
@@ -187,8 +180,9 @@ const label: int = match (result) {
 }
 ```
 
-`match` expressions with guard conditions replaces both `else if` chains and `switch` / `case` statements.
-Guards are evaluated in order, and the first one that matches is used.
+### Guards
+
+A guard, `if (condition)` after a pattern, makes the arm match only when the condition is true. `match` with guards replaces both `else if` chains and `switch` / `case` statements:
 
 ```ez
 age: int = 14

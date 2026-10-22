@@ -1,5 +1,7 @@
 # Conventions
 
--   The language uses `camelCase` for variable and function names.
--   Parentheses are required in conditions and function calls.
--   Strings support both single (`'`) and double (`"`) quotes, but **the convention is to prefer single quotes**.
+-   Variables and functions use `camelCase`: `userName`, `parseAge`.
+-   Types and variants use `PascalCase`: `Person`, `FileError`, `NotFound`.
+-   Parentheses are required around conditions (`if (x > 0)`, `while (running)`, `match (value)`) and in function calls.
+-   Strings can use single (`'`) or double (`"`) quotes, but **the convention is to prefer single quotes**. Backticks are for [interpolation](string-interpolation.md).
+-   Imports are written at the top of the file.

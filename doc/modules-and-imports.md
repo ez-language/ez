@@ -1,8 +1,8 @@
 # Modules and Imports
 
-Modules allow you to organize your code in separate files, and you can import an entire module or specific items from it.
+Modules organize code in separate files. Each file is a module: it can import a whole module, or specific items from it.
 
-## Module Structure:
+## Declaring a Module
 
 ```ez
 // file: math.ez
@@ -16,7 +16,7 @@ export function subtract(a: int, b: int): int {
 }
 ```
 
-Everything in a module is private by default. Only declarations marked with `export` (functions, `var`, `const` and `imut` variables, and types) can be imported by other modules. Exporting a sum type also exports its variants.
+Everything in a module is private by default. Only declarations marked with `export` (functions, `var`, `const` and `imut` variables, and types) can be imported by other modules. Exporting a sum type also exports its variants, and the methods of an exported type are available wherever the type is.
 
 ```ez
 // file: math.ez
@@ -32,7 +32,7 @@ import { clamp } from 'math.ez' // Error! 'clamp' is not exported by 'math.ez'
 
 `export` is only allowed at the top level of a file, and must be followed by `function`, `var`, `const`, `imut` or `type`. A declaration without a keyword (`x = 1`) cannot be exported.
 
-## Using Modules:
+## Importing a Module
 
 ```ez
 // file: main.ez
@@ -44,7 +44,7 @@ result: int = math.add(5, 10)
 print(result) // 15
 ```
 
-Or import specific items:
+The module is named after the file (`math`), and its items are used as `math.add`. To use them without the prefix, import specific items:
 
 ```ez
 // file: main.ez
@@ -56,7 +56,7 @@ result: int = add(5, 10)
 print(result) // 15
 ```
 
-In the example above, we're importing the `math` module that contains the functions `add` and `subtract`, which we can call in the main code.
+Paths are relative to the importing file. Standard library modules are imported by name, without a path: `import math` (see [Standard Library](stdlib.md)).
 
 Imports apply to the whole file, wherever they are written: types and functions declared before an `import` can already use it. The convention is to write them at the top of the file.
 

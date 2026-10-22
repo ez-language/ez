@@ -16,9 +16,9 @@ The `http` module allows sending HTTP requests and handling responses.
 -   `delete(url: string) -> Result[Response, HttpError]`  
     Sends a DELETE request to the specified URL.
 
-## Response Object
+## The `Response` Type
 
-A response object returned from an HTTP request contains:
+The response to a request has these fields:
 
 -   `status: int`  
     The HTTP status code of the response.

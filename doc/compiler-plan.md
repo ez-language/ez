@@ -2,13 +2,13 @@
 
 This document plans the path from the current implementation to a **self-hosted compiler**: an ez compiler written in ez that produces native binaries. It records the language decisions already made and the ones still open.
 
-> Status: the [decisions](#decisions) below are implemented in the current (interpreted) implementation, except where noted. The phases that build the compiler have not started.
+> Status: the [decisions](#decisions) below are implemented in the current (interpreted) implementation, except where noted. The phases that build the compiler (2 to 5) have not started.
 
 ---
 
 ## Where we are
 
-Today `ez <file>` runs four stages, all written in Rust:
+Today `ez run <file>` runs four stages, all written in Rust:
 
 1. **Lexer** (`src/lexer/`): source text → tokens.
 2. **Parser** (`src/parser/`): tokens → AST.
@@ -167,48 +167,6 @@ A method that changes its value declares **`mut self`**. The call does not repea
 
 Implemented; see [Custom Types](custom-types.md#methods).
 
-### Value semantics details
-
--   **Closures capture a read-only copy** of the variables they use: assigning to a captured variable (or changing its contents) is a compile error, and the closure sees the value from the moment it was created. Module variables are not captured: functions read and change them directly. State that changes is kept another way (e.g. a type with methods). Implemented.
--   **`mut` marks a parameter the function may modify**, both in the declaration and in the call, so the change is visible where it happens:
-
-    ```ez
-    function addItem(mut list: int[], item: int) { ... }
-
-    addItem(mut items, 2)
-    ```
-
-    An `imut` variable can never be passed as `mut`, and a `const` neither (the function could replace the value). Parameters without `mut` (and `self`) are read-only. Implemented; see [Functions](functions.md#mut-parameters).
--   **Move-only types**, including user types: values that cannot be copied (resources). Assigning moves them, and using the previous variable is a compile error.
--   **Only move-only types can have a `drop`** method, called automatically when the value is dropped. A copyable type with `drop` would run it once per copy.
--   **Move-only is implicit**: a type is move-only when it declares a `drop` method, or when it has a field of a move-only type (a type holding a `File` cannot be copied either). There is no separate marker. Not implemented yet: it comes with value semantics in the interpreter.
--   **`for` and `match` variables are `imut`**: `for x in items` gives an imut `x`; `for mut x in items` allows changing it (a copy: the list does not change). Variables bound by `match` patterns are always imut. Implemented.
--   **Intentionally shared structures** (graphs, caches) use indices into a list ("arenas"). An explicit shared type may come later, only if arenas prove insufficient.
-
-The other items are not implemented yet (phase 1).
-
-### Standard library: file modes and readable errors
-
--   `file.open(path, mode)` takes a sum type, so an invalid mode does not compile:
-
-    ```ez
-    type Mode = { Read  Write  Append }
-
-    f = file.open('notes.txt', Read)?
-    ```
-
--   `print(error)` (and string interpolation) shows a human-readable message for standard library errors, e.g. `file 'notes.txt' not found` instead of `NotFound('notes.txt')`. The same text is available as `error.display()`.
-
-Both are implemented.
-
-### Block scope
-
-A variable belongs to the block where it is declared (the file, a function, or any `{ ... }` block) and is visible in the blocks inside it. Assigning to a name that exists in an outer block changes that variable; otherwise the assignment declares a new variable in the current block.
-
-### Imports apply to the whole block
-
-`import` statements are processed before the rest of their block, so types and functions declared before an `import` can use it (like ES modules).
-
 ### Memory management: ownership, value semantics and drop
 
 Memory is managed with **ownership**, without a garbage collector. Every value has exactly one owner, and when the owner goes out of scope the value is **dropped**: its memory is released and, for resources, the resource is closed. This is deterministic, so there is no `defer`.
@@ -238,7 +196,49 @@ Consequences:
 -   **`defer` is not needed**: dropping releases resources. It may come back later as an optional feature, for cleanup that does not belong to any value.
 -   **Resource types are move-only.** A `File` cannot be copied (two copies would close the same file): `g = f` moves it, and using `f` afterwards is a compile error. `f.close()` consumes `f`, so using a closed file is a compile error instead of a panic.
 
-The current interpreter still uses shared references: it will be changed to these semantics in phase 1, so that `ez run` and `ez build` behave the same.
+The current interpreter still uses shared references (and `is` still compares references between objects): it will be changed to these semantics in phase 1, so that `ez run` and `ez build` behave the same.
+
+### Value semantics details
+
+-   **Closures capture a read-only copy** of the variables they use: assigning to a captured variable (or changing its contents) is a compile error, and the closure sees the value from the moment it was created. Module variables are not captured: functions read and change them directly. State that changes is kept another way (e.g. a type with methods). Implemented.
+-   **`mut` marks a parameter the function may modify**, both in the declaration and in the call, so the change is visible where it happens:
+
+    ```ez
+    function addItem(mut list: int[], item: int) { ... }
+
+    addItem(mut items, 2)
+    ```
+
+    An `imut` variable can never be passed as `mut`, and a `const` neither (the function could replace the value). Parameters without `mut` (and `self`) are read-only. Implemented; see [Functions](functions.md#mut-parameters).
+-   **Move-only types**, including user types: values that cannot be copied (resources). Assigning moves them, and using the previous variable is a compile error.
+-   **Only move-only types can have a `drop`** method, called automatically when the value is dropped. A copyable type with `drop` would run it once per copy.
+-   **Move-only is implicit**: a type is move-only when it declares a `drop` method, or when it has a field of a move-only type (a type holding a `File` cannot be copied either). There is no separate marker. Not implemented yet: it comes with value semantics in the interpreter.
+-   **`for` and `match` variables are `imut`**: `for x in items` gives an imut `x`; `for mut x in items` allows changing it (a copy: the list does not change). Variables bound by `match` patterns are always imut. Implemented.
+-   **Intentionally shared structures** (graphs, caches) use indices into a list ("arenas"). An explicit shared type may come later, only if arenas prove insufficient.
+
+Move-only types and `drop` are not implemented yet (phase 1).
+
+### Standard library: file modes and readable errors
+
+-   `file.open(path, mode)` takes a sum type, so an invalid mode does not compile:
+
+    ```ez
+    type Mode = { Read  Write  Append }
+
+    f = file.open('notes.txt', Read)?
+    ```
+
+-   `print(error)` (and string interpolation) shows a human-readable message for standard library errors, e.g. `file 'notes.txt' not found` instead of `NotFound('notes.txt')`. The same text is available as `error.display()`.
+
+Both are implemented.
+
+### Block scope
+
+A variable belongs to the block where it is declared (the file, a function, or any `{ ... }` block) and is visible in the blocks inside it. Assigning to a name that exists in an outer block changes that variable; otherwise the assignment declares a new variable in the current block.
+
+### Imports apply to the whole block
+
+`import` statements are processed before the rest of their block, so types and functions declared before an `import` can use it (like ES modules).
 
 ### `MathError.Indeterminate` stays
 
@@ -248,7 +248,7 @@ It is kept for future functions, even though no current function returns it (`0 
 
 `type` covers what interfaces did: shape types describe the fields of a value. Shape types are **nominal**: two types with the same fields are different types (`Celsius` and `Fahrenheit` do not mix), and an object literal is accepted by any type whose fields it matches.
 
-`interface` stays a reserved word, as a precaution, in case behavior contracts (e.g. constraints on generic types) are ever needed. Until then, generics have no constraints: `==` works on every type, and behavior is passed as functions (e.g. `sort(items, (a, b) => a.age < b.age)`).
+`interface` stays a reserved word, as a precaution, in case behavior contracts (e.g. constraints on generic types) are ever needed. Whether generics need constraints is still an [open decision](#open-decisions); without them, behavior is passed as functions (e.g. `sort(items, (a, b) => a.age < b.age)`).
 
 ### No `try` / `catch`
 
@@ -305,19 +305,17 @@ type ParseError = {
 // math
 type MathError = {
     Complex          // the result exists only in the complex numbers: sqrt(-1), log(-1)
-    Indeterminate    // indeterminate form (no current function returns it; see Open decisions)
+    Indeterminate    // indeterminate form (no current function returns it)
     Infinite         // the result is infinite (a pole): pow(0, -1), log(0)
 }
-```
 
-`time` has no error type. `input()` keeps returning `Option[string]`.
-
-```ez
-// regex
+// regex.compile
 type RegexError = {
     InvalidPattern(pattern: string, message: string)
 }
 ```
+
+`time` has no error type. `input()` keeps returning `Option[string]`.
 
 `regex.compile(pattern)` returns `Result[Regex, RegexError]`, and the methods of `Regex` (`test`, `find`, `findAll`, `replace`, `replaceAll`, `split`) cannot fail. More variants may be added. Implemented.
 
@@ -344,11 +342,11 @@ One rule decides how numeric failures are reported:
 
 Operators cannot return a `Result`, so they always panic, including on domain problems such as division by zero.
 
-In `math` functions, an infinite result (a pole, such as `math.pow(0, -1)`, which is `1 / 0`) is `Err(Infinite)`. It is not an overflow: a larger type would fit an overflowing result, but no type can represent an infinite one. `Infinite` has no sign field, because the sign is always determined by the function (`pow(0, -y)` is always `+∞`, a future `log(0)` always `-∞`). Operators still panic on division by zero.
+In `math` functions, an infinite result (a pole, such as `math.pow(0, -1)`, which is `1 / 0`) is `Err(Infinite)`. It is not an overflow: a larger type would fit an overflowing result, but no type can represent an infinite one. `Infinite` has no sign field, because the sign is always determined by the function (`pow(0, -y)` is always `+∞`, a future `log(0)` always `-∞`).
 
 Float literals support scientific notation (`6.022e23`).
 
-### Division (already implemented)
+### Division
 
 Like Go and Rust: `int / int` gives an `int` truncated toward zero, a division with a `float` gives a `float`, and `%` has the sign of the dividend. `//` is always a comment.
 
@@ -358,7 +356,7 @@ Like Go and Rust: `int / int` gives an `int` truncated toward zero, a division w
 
 A compiler is a large program, with many data structures and many operations that can fail. These features are needed before writing `ezc` in ez, in order of importance:
 
-1.  **User-defined generics**: `type Map[K, V]`, `function find[T](...)`, using the same bracket syntax as `Option[T]`. Without constraints (see [No `interface`](#no-interface)).
+1.  **User-defined generics**: `type Map[K, V]`, `function find[T](...)`, using the same bracket syntax as `Option[T]` (constraints are an [open decision](#open-decisions)).
 2.  **Collections**:
     -   lists with `push`, `pop`, `insert` and slicing;
     -   maps with any comparable key type (index signatures only allow `string` keys today);
@@ -383,7 +381,6 @@ A compiler is a large program, with many data structures and many operations tha
 
 ### Semantics to settle before compiling
 
--   **Closures** capture variables by reference today; with value semantics this changes (see [Open decisions](#open-decisions)).
 -   **`int` to `float` coercion** is inconsistent today (an `int` stored in a `float` field of an object stays an `int`). With complete types, every conversion is explicit in the generated code.
 -   **Memory management**: ownership with value semantics, copy-on-write and drop (see [Memory management](#memory-management-ownership-value-semantics-and-drop)).
 

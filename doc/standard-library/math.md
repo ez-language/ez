@@ -4,30 +4,32 @@ The `math` module provides mathematical functions and constants.
 
 ## Functions
 
--   `abs(x: number) -> number`  
-    Returns the absolute value of `x`.
+The parameters written `float` also accept an `int`.
 
--   `sqrt(x: number) -> Result[float, MathError]`  
+-   `abs(x: int) -> int`, `abs(x: float) -> float`  
+    Returns the absolute value of `x`, with the same type as `x`.
+
+-   `sqrt(x: float) -> Result[float, MathError]`  
     Returns the square root of `x`. Fails with `Complex` when `x` is negative.
 
--   `pow(x: number, y: number) -> Result[float, MathError]`  
+-   `pow(x: float, y: float) -> Result[float, MathError]`  
     Returns `x` raised to the power of `y`. Fails with `Complex` when `x` is negative and `y` is not an integer (e.g. `pow(-8, 0.5)`), and with `Infinite` when `x` is `0` and `y` is negative (e.g. `pow(0, -1)`, which is `1 / 0`). `pow(0, 0)` is `1`: that is the value of the expression (only the limit form 0⁰ is indeterminate).
 
--   `floor(x: number) -> number`  
+-   `floor(x: float) -> int`  
     Returns the largest integer less than or equal to `x`.
 
--   `ceil(x: number) -> number`  
+-   `ceil(x: float) -> int`  
     Returns the smallest integer greater than or equal to `x`.
 
--   `round(x: number) -> number`  
-    Rounds `x` to the nearest integer.
+-   `round(x: float) -> int`  
+    Rounds `x` to the nearest integer (halfway cases away from zero: `round(2.5)` is `3`).
 
 ## Errors
 
 The `math` module follows one rule:
 
 -   **Domain problems return a `MathError`.** The result does not exist in the real numbers.
--   **Representation limits panic.** The result exists, but does not fit in an `int` or a `float` (e.g. `math.pow(10, 400)`, or `math.round(1e300)` as an `int`).
+-   **Representation limits panic.** The result exists, but does not fit in an `int` or a `float` (e.g. `math.pow(10, 400)`, or `math.round(1e300)`, which does not fit in an `int`).
 
 ```ez
 type MathError = {

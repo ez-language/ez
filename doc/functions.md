@@ -20,19 +20,35 @@ function factorial(x: int): int {
 print(factorial(4)) // 24
 ```
 
-## Anonymous Function
+Parameters always have a type. The return type comes after `)`; without it, the function returns nothing (`void`).
+
+A function whose body is a block can return its last expression without `return`:
+
+```ez
+function max(a: int, b: int): int {
+	if (a > b) { a } else { b }
+}
+```
+
+## Anonymous Functions
 
 ```ez
 const double = (x: int): int => {
 	return x * 2
 }
 
-// or simply
-
-const double = (x: int) => x * 2
-
 print(double(10)) // 20
 ```
+
+When the body is a single expression, the braces and `return` can be left out, and the return type is inferred:
+
+```ez
+const triple = (x: int) => x * 3
+
+print(triple(10)) // 30
+```
+
+The type of a function is written `(parameters) => return type`: `(int) => int`.
 
 ## Capturing Variables
 

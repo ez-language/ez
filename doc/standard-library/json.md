@@ -28,7 +28,7 @@ type JsonObject = {
 
 ## Functions
 
--   `parse(jsonString: string) -> Result[Json, JsonError]`  
+-   `parse(text: string) -> Result[Json, JsonError]`  
     Converts a JSON string into a `Json` value.
 
 -   `stringify(value: Json) -> string`  

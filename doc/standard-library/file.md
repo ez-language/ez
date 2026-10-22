@@ -17,7 +17,7 @@ The `file` module provides functionality for working with files.
 
     With `import file`, the modes are `file.Read`, `file.Write` and `file.Append`. With `import { Mode } from 'file'`, they can be written `Read`, `Write` and `Append`. Since the mode is a sum type, an invalid mode does not compile.
 
-## File Object Methods
+## Methods of `File`
 
 -   `read() -> Result[string, FileError]`  
     Reads the entire contents of the file. The file must have been opened with `Read`.

@@ -1,24 +1,41 @@
 # ez Language Documentation
 
-Welcome to **ez Language Documentation**. Here you will find details about sintax, types, functions, data structures and more.
+Welcome to the **ez** documentation. Here you will find the syntax, the types, functions, error handling, modules and the standard library.
 
-## Content Table
+New to ez? Start with [Getting Started](getting-started.md).
+
+## Contents
+
+### Basics
 
 -   [Getting Started](getting-started.md)
 -   [Conventions](conventions.md)
--   [Variable Types](variable-types.md)
--   [Primitive Types](primitive-types.md)
--   [Composite Types](composite-types.md)
--   [Sum Types](sum-types.md)
--   [Custom Types](custom-types.md)
 -   [Comments](comments.md)
--   [Built-ins](builtins.md)
--   [Control Flow](control-flow.md)
+-   [Variable Types](variable-types.md): `var`, `const` and `imut`
+
+### Types
+
+-   [Primitive Types](primitive-types.md): `int`, `float`, `string`, `boolean`
+-   [Composite Types](composite-types.md): lists
+-   [Custom Types](custom-types.md): shapes, dictionaries, methods and display
+-   [Sum Types](sum-types.md): variants, `Option` and `Result`
+
+### Code
+
 -   [Operators](operators.md)
--   [Methods](methods.md)
+-   [Control Flow](control-flow.md): `if`, loops and `match`
 -   [Functions](functions.md)
--   [Error Handling](error-handling.md)
 -   [String Interpolation](string-interpolation.md)
+-   [Error Handling](error-handling.md): `Result`, `?` and panics
 -   [Modules and Imports](modules-and-imports.md)
+
+### Reference
+
+-   [Built-in Functions](builtins.md): `print`, `input`, `range`, conversions and `panic`
+-   [Built-in Methods](methods.md): methods of strings, lists and every value
 -   [Standard Library](stdlib.md)
--   [Compiler Plan](compiler-plan.md)
+
+### The Project
+
+-   [Roadmap](roadmap.md)
+-   [Compiler Plan](compiler-plan.md): language decisions and the path to a self-hosted compiler
