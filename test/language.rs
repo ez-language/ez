@@ -345,12 +345,12 @@ fn string_methods() {
     let source = r#"
         print('abc'.length(), '  hi  '.trim(), 'hello'.upper(), 'HELLO'.lower())
         print('   '.isSpace(), '123'.isNumeric(), 'abc'.isAlpha(), 'abc123'.isAlphaNumeric())
-        print('ABC'.isUpper(), 'abc'.isLower(), 'Hello World'.isTitle(), 'Hello world'.isTitle())
+        print('ABC'.isUpper(), 'abc'.isLower(), 'Hello World'.isTitle(), 'Hello world'.isTitle(), '123'.isTitle())
         print('a b'.split(' '), 'hello'.replace('hello', 'hi'))
     "#;
     assert_eq!(
         run(source),
-        "3 hi HELLO hello\ntrue true true true\ntrue true true false\n['a', 'b'] hi\n"
+        "3 hi HELLO hello\ntrue true true true\ntrue true true false false\n['a', 'b'] hi\n"
     );
 }
 
@@ -1177,19 +1177,24 @@ fn stdlib_datetime() {
 
         match (datetime.parse('2025-04-20', 'YYYY-MM-DD')) {
             Ok(timestamp) => {
+                print(timestamp)
                 print(datetime.format(timestamp, 'DD/MM/YYYY'))
+                print(datetime.format(timestamp, 'yyyy-mm-dd hh:min:ss'))
                 print(datetime.format(timestamp + 3661, 'yyyy-mm-dd hh:min:ss'))
             }
             Err(error) => print(error)
         }
         print(datetime.parse('2025-02-30', 'YYYY-MM-DD'), datetime.parse('20/04', 'YYYY-MM-DD'))
+        print(datetime.parse('2025/02/03', 'YYYY-MM-DD'))
 
         now = datetime.now()
         print(now.year >= 2025, now.month >= 1 and now.month <= 12)
     "#;
     assert_eq!(
         run(source),
-        "10\n20/04/2025\n2025-04-20 01:01:01\nErr(InvalidDate('2025-02-30')) Err(PatternMismatch('20/04', 'YYYY-MM-DD'))\ntrue true\n"
+        "10\n1745107200\n20/04/2025\n2025-04-20 00:00:00\n2025-04-20 01:01:01\n\
+         Err(InvalidDate('2025-02-30')) Err(PatternMismatch('20/04', 'YYYY-MM-DD'))\n\
+         Err(PatternMismatch('2025/02/03', 'YYYY-MM-DD'))\ntrue true\n"
     );
 }
 
@@ -1282,12 +1287,20 @@ fn stdlib_json() {
         }
 
         print(json.stringify(json.Array([json.Float(2.0), json.Int(2), json.String('a'), json.Null, json.Bool(false), json.Float(6.022e23)])))
+        // parse and stringify give back the same text; floats keep their decimal point
+        for text in ['{"name":"ezlang","year":2025,"tags":[1,2.5,null]}', '[2.0, 1e3]'] {
+            match (json.parse(text)) {
+                Ok(value) => print(json.stringify(value))
+                Err(error) => print(error)
+            }
+        }
         print(json.parse('{"a": }'))
         print(json.parse('[1,\n 99999999999999999999]'))
     "#;
     assert_eq!(
         run(source),
-        "ezlang\nnull\nInt(2025) Array([String('a')]) Float(3.14)\nSome(Int(2025)) None\nSome(2025) Some(2025.0) None\n{\"year\":2025}\n[2.0,2,\"a\",null,false,6.022e23]\nErr(Syntax('unexpected character \\'}\\'', 1, 7))\nErr(NumberOutOfRange('99999999999999999999', 2, 2))\n"
+        "ezlang\nnull\nInt(2025) Array([String('a')]) Float(3.14)\nSome(Int(2025)) None\nSome(2025) Some(2025.0) None\n{\"year\":2025}\n[2.0,2,\"a\",null,false,6.022e23]\n\
+         {\"name\":\"ezlang\",\"year\":2025,\"tags\":[1,2.5,null]}\n[2.0,1000.0]\nErr(Syntax('unexpected character \\'}\\'', 1, 7))\nErr(NumberOutOfRange('99999999999999999999', 2, 2))\n"
     );
     assert_error("import json\nprint(json.stringify(1))", "must be Json");
 }
