@@ -4,6 +4,7 @@ Welcome to **ez Language Documentation**. Here you will find details about sinta
 
 ## Content Table
 
+-   [Getting Started](getting-started.md)
 -   [Conventions](conventions.md)
 -   [Variable Types](variable-types.md)
 -   [Primitive Types](primitive-types.md)
