@@ -4,13 +4,34 @@
 
 | Operator | Description                       |
 | -------- | --------------------------------- |
-| `+`      | Addition or concat                |
+| `+`      | Addition                          |
 | `-`      | Subtraction                       |
 | `*`      | Multiplication                    |
-| `/`      | Division (floating-point)         |
-| `//`     | Integer Division (floor division) |
+| `/`      | Division                          |
 | `**`     | Exponentiation                    |
 | `%`      | Modulus (remainder)               |
+
+Division follows the type of the operands: dividing two `int` values gives an `int` (truncated toward zero), and dividing `float` values gives a `float`. If one operand is a `float`, the result is a `float`. The remainder `%` has the sign of the dividend.
+
+```ez
+7 / 2 // 3
+-7 / 2 // -3
+7.0 / 2.0 // 3.5
+7 / 2.0 // 3.5
+-7 % 2 // -1
+```
+
+`//` is always a comment (see [Comments](comments.md)).
+
+Operators cannot return a `Result`, so an invalid arithmetic operation panics:
+
+-   division by zero (`1 / 0`, `1.5 % 0.0`, `0.0 ** -1.0`);
+-   results that do not fit in an `int` or a `float` (overflow);
+-   `**` with a result that is not a real number (`(-8.0) ** 0.5`).
+
+`0 ** 0` is `1`.
+
+To handle the `**` cases instead of panicking, use `math.pow`, which returns a `MathError` (`Complex` or `Infinite`; see [math](standard-library/math.md)).
 
 ## Comparison Operators
 
@@ -22,25 +43,33 @@
 | `<`      | Less than                                                  |
 | `>=`     | Greater than or equal                                      |
 | `<=`     | Less than or equal                                         |
-| `is`     | Identity comparison                                        |
-| `in`     | Membership check (checks if an element is in a collection) |
+| `is`     | Variant check (whether a value is a given variant)         |
+| `in`     | Membership check (whether an element is in a collection)   |
 
-Examples:
-
--  `is`:
+`==` compares values: two lists or objects are equal when their contents are equal.
 
 ```ez
 const a = { name: 'Ana', age: 30 }
 const b = { name: 'Ana', age: 30 }
 
-a == b  // true  — fields are equal
-a is b  // false — different objects in memory
+a == b // true: the fields are equal
 ```
 
--  `in`:
+`in` checks whether an element is in a list, or a text in a string:
 
 ```ez
-'a' in 'banana'  // true
+'a' in 'banana' // true
+2 in [1, 2, 3] // true
+```
+
+`is` checks the variant of a sum type value. Inside the `if`, the fields of the variant can be used:
+
+```ez
+result = Some(1)
+
+if (result is Some) {
+	print(result.value) // 1
+}
 ```
 
 ## Logical Operators
@@ -51,12 +80,10 @@ a is b  // false — different objects in memory
 | `or`     | Logical OR  |
 | `not`    | Logical NOT |
 
-Examples:
-
--  `not`:
-
 ```ez
-if not (age > 18) { ... }
+if (age >= 18 and not hasTicket) {
+	print('buy a ticket first')
+}
 ```
 
 ## Assignment Operators
@@ -68,7 +95,6 @@ if not (age > 18) { ... }
 | `-=`     | Subtract and assign                        |
 | `*=`     | Multiply and assign                        |
 | `/=`     | Divide and assign                          |
-| `//=`    | Integer Divide and assign                  |
 | `**=`    | Exponentiate and assign                    |
 | `%=`     | Modulus and assign                         |
 

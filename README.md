@@ -24,6 +24,12 @@ The goal is to provide a language that any developer can quickly learn and use c
 
 ---
 
+## Getting Started
+
+New to ez? Start with [Getting Started](doc/getting-started.md).
+
+---
+
 ## Documentation
 
 Access the documentation [here](doc/README.md).

@@ -1,19 +1,26 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Identifier(String),
-    Number(f64),
+    Int(i64),
+    Float(f64),
     StringLiteral(String),
     /// Raw content between backticks, still with `${...}` and escape characters. The parser interprets it.
     TemplateString(String),
     Boolean(bool),
-    Null,
     Var,
     Const,
+    Imut,
+    Mut,
     Type,
+    Interface,
+    Import,
+    Export,
+    From,
     If,
     Else,
     For,
     In,
+    Is,
     While,
     Func,
     Return,
@@ -32,14 +39,23 @@ pub enum Token {
     Plus,
     Minus,
     Star,
+    StarStar,
     Slash,
     Percent,
+    Ampersand,
+    Pipe,
+    Caret,
+    Tilde,
+    ShiftLeft,
+    ShiftRight,
     Equal,
     EqualEqual,
     PlusEqual,
     MinusEqual,
     StarEqual,
+    StarStarEqual,
     SlashEqual,
+    PercentEqual,
     Bang,
     BangEqual,
     Greater,
@@ -58,7 +74,54 @@ pub enum Token {
     Dot,
     Semicolon,
     Colon,
+    /// `?`: error propagation.
+    Question,
     /// A character that does not belong to the language.
     Illegal(char),
     EOF,
+}
+
+impl Token {
+    /// Keyword spelling, so keywords can still be used as member names (`regex.match(...)`).
+    pub fn keyword_name(&self) -> Option<&'static str> {
+        let name = match self {
+            Token::Var => "var",
+            Token::Const => "const",
+            Token::Imut => "imut",
+            Token::Mut => "mut",
+            Token::Type => "type",
+            Token::Interface => "interface",
+            Token::Import => "import",
+            Token::Export => "export",
+            Token::From => "from",
+            Token::If => "if",
+            Token::Else => "else",
+            Token::For => "for",
+            Token::In => "in",
+            Token::Is => "is",
+            Token::While => "while",
+            Token::Func => "function",
+            Token::Return => "return",
+            Token::Async => "async",
+            Token::Await => "await",
+            Token::Match => "match",
+            Token::Default => "default",
+            Token::Break => "break",
+            Token::Continue => "continue",
+            Token::Fallthrough => "fallthrough",
+            Token::And => "and",
+            Token::Or => "or",
+            Token::Not => "not",
+            _ => return None,
+        };
+        Some(name)
+    }
+}
+
+/// A token together with the position (1-based) where it starts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpannedToken {
+    pub token: Token,
+    pub line: usize,
+    pub column: usize,
 }

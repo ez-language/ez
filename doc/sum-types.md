@@ -26,6 +26,32 @@ function handleResult(result: Result) {
 }
 ```
 
+## Built-in Sum Types
+
+`Option[T]` and `Result[T, E]` are provided by the language and behave as if they were declared like this (user-defined types cannot take type parameters):
+
+```ez
+type Option[T] = {
+	Some(value: T)
+	None
+}
+
+type Result[T, E] = {
+	Ok(value: T)
+	Err(error: E)
+}
+```
+
+Use `is` to check a variant; inside the `if`, its fields can be accessed directly:
+
+```ez
+name: Option[string] = Some('Ana')
+
+if (name is Some) {
+	print(name.value) // Ana
+}
+```
+
 ## Wildcard Matching
 
 Use `_` as a wildcard to match any value not already covered:

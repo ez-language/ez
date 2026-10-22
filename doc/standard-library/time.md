@@ -4,13 +4,13 @@ The `time` module provides functions to delay execution and measure elapsed time
 
 ## Functions
 
--   `sleep(seconds: number) -> void`  
-    Pauses the execution for the specified number of seconds.
+-   `sleep(seconds: float) -> void`  
+    Pauses the execution for the specified number of seconds (an `int` is accepted too).
 
--   `now() -> number`  
+-   `now() -> float`  
     Returns the current time in seconds since the epoch. This value reflects the system clock and may change if the system time is adjusted.
 
--   `monotonic() -> number`  
+-   `monotonic() -> float`  
     Returns a monotonically increasing time value, useful for measuring durations. This value is not affected by changes to the system clock.
 
 ## Choosing Between `now()` and `monotonic()`

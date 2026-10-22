@@ -1,0 +1,17 @@
+type Shape = {
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+}
+
+function area(shape: Shape): float {
+    match (shape) {
+        Circle(radius) => 3.14 * radius * radius
+        Rectangle(width, height) => width * height
+    }
+}
+
+shapes: Shape[] = [Circle(1.0), Rectangle(2.0, 3.0)]
+
+for shape in shapes {
+    print(`${shape}: ${area(shape)}`)
+}
