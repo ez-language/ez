@@ -247,8 +247,8 @@ fn identity_and_membership() {
         const a = { name: 'Ana', age: 30 }
         const b = { name: 'Ana', age: 30 }
 
-        print(a == b)  // true  — fields are equal
-        print(a is b)  // false — different objects in memory
+        print(a == b) // true: the fields are equal
+        print(a is b) // false: different objects in memory
         print(a is a)
         print('a' in 'banana')
         print(2 in [1, 2, 3], 'x' in ['a'])
