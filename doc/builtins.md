@@ -17,7 +17,7 @@ Shows its arguments, separated by spaces. Each value is shown as its [`display()
 ```ez
 name: string = 'John'
 
-print(`Hello, ${name}!`)   // Hello, John!
+print(`Hello, ${name}!`) // Hello, John!
 print('total:', 3, [1, 2]) // total: 3 [1, 2]
 ```
 
@@ -39,9 +39,9 @@ match (name) {
 `range(end)`, `range(start, end)` or `range(start, end, step)`: the integers from `start` (default `0`) up to, but not including, `end`. A negative `step` counts down; a `step` of `0` panics.
 
 ```ez
-range(5)          // [0, 1, 2, 3, 4]
-range(2, 5)       // [2, 3, 4]
-range(10, 0, -3)  // [10, 7, 4, 1]
+range(5) // [0, 1, 2, 3, 4]
+range(2, 5) // [2, 3, 4]
+range(10, 0, -3) // [10, 7, 4, 1]
 ```
 
 ## Conversions
@@ -58,14 +58,14 @@ Converting a `string` can fail, so `int(x)` and `float(x)` return a `Result[int,
 
 ```ez
 type ParseError = {
-	InvalidNumber(text: string)   // not a number: 'abc', 'nan', 'inf'
-	OutOfRange(text: string)      // too large: '99999999999999999999', '1e400'
+	InvalidNumber(text: string) // not a number: 'abc', 'nan', 'inf'
+	OutOfRange(text: string) // too large: '99999999999999999999', '1e400'
 }
 ```
 
 ```ez
-int(3.9)   // 3
-int('0')   // Ok(0)
+int(3.9) // 3
+int('0') // Ok(0)
 int('abc') // Err(InvalidNumber('abc'))
 
 match (int('42')) {

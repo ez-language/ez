@@ -45,7 +45,7 @@ function parseAge(text: string): Result[int, ParseError] {
 }
 
 print(parseAge('42')) // Ok(42)
-print(parseAge('x'))  // Err(InvalidNumber('x'))
+print(parseAge('x')) // Err(InvalidNumber('x'))
 ```
 
 The function must declare its return type, and it must be a `Result` (for `?` on a `Result`) or an `Option` (for `?` on an `Option`).
@@ -70,8 +70,8 @@ type ConfigError = {
 }
 
 function readConfig(path: string): Result[json.Json, ConfigError] {
-	f = file.open(path, file.Read)?   // a FileError becomes File(...)
-	text = f.read()?            // a FileError becomes File(...)
+	f = file.open(path, file.Read)? // a FileError becomes File(...)
+	text = f.read()? // a FileError becomes File(...)
 	f.close()
 
 	return Ok(json.parse(text)?) // a JsonError becomes Json(...)

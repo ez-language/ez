@@ -21,7 +21,7 @@ Everything in a module is private by default. Only declarations marked with `exp
 ```ez
 // file: math.ez
 
-function clamp(x: int): int { ... }   // private: only usable inside math.ez
+function clamp(x: int): int { ... } // private: only usable inside math.ez
 
 export const pi: float = 3.14159
 ```
@@ -80,8 +80,8 @@ export function increment() {
 import { count, increment } from 'counter.ez'
 
 increment()
-print(count)    // 1
-count = 5       // Error! 'count' is read-only outside 'counter.ez'
+print(count) // 1
+count = 5 // Error! 'count' is read-only outside 'counter.ez'
 ```
 
 Like `const`, only the variable is read-only: the contents of an exported list or object can still be changed.

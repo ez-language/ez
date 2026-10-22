@@ -102,8 +102,8 @@ Everything in a module is private by default. Only declarations marked with `exp
     import { count, increment } from 'counter.ez'
 
     increment()
-    print(count)    // 1
-    count = 5       // Error! 'count' is read-only outside 'counter.ez'
+    print(count) // 1
+    count = 5 // Error! 'count' is read-only outside 'counter.ez'
     ```
 
 -   Importing something that is not exported is an error: `'helper' is not exported by 'math.ez'`.
@@ -133,7 +133,7 @@ function readConfig(path: string): Result[json.Json, ConfigError] {
     f = file.open(path, file.Read)? // FileError → File(...)
     text = f.read()?
 
-    return Ok(json.parse(text)?)    // JsonError → Json(...)
+    return Ok(json.parse(text)?) // JsonError → Json(...)
 }
 ```
 
@@ -174,8 +174,8 @@ Memory is managed with **ownership**, without a garbage collector. Every value h
 ```ez
 function readNotes(): Result[string, file.FileError] {
     f = file.open('notes.txt', file.Read)?
-    content = f.read()?   // on an error, '?' returns and 'f' is closed
-    return Ok(content)    // 'f' goes out of scope: the file is closed
+    content = f.read()? // on an error, '?' returns and 'f' is closed
+    return Ok(content) // 'f' goes out of scope: the file is closed
 }
 ```
 
@@ -183,10 +183,10 @@ function readNotes(): Result[string, file.FileError] {
 
 ```ez
 a = [1, 2, 3]
-b = a          // nothing is copied yet
-b[0] = 9       // the list is copied now, because b changes
-print(a)       // [1, 2, 3]
-print(b)       // [9, 2, 3]
+b = a // nothing is copied yet
+b[0] = 9 // the list is copied now, because b changes
+print(a) // [1, 2, 3]
+print(b) // [9, 2, 3]
 ```
 
 Consequences:
@@ -304,9 +304,9 @@ type ParseError = {
 
 // math
 type MathError = {
-    Complex          // the result exists only in the complex numbers: sqrt(-1), log(-1)
-    Indeterminate    // indeterminate form (no current function returns it)
-    Infinite         // the result is infinite (a pole): pow(0, -1), log(0)
+    Complex // the result exists only in the complex numbers: sqrt(-1), log(-1)
+    Indeterminate // indeterminate form (no current function returns it)
+    Infinite // the result is infinite (a pole): pow(0, -1), log(0)
 }
 
 // regex.compile

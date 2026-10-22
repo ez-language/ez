@@ -36,8 +36,8 @@ The `datetime` module provides utilities to work with current date and time, and
 
     ```ez
     type DateError = {
-        PatternMismatch(text: string, pattern: string)   // the text does not follow the pattern
-        InvalidDate(text: string)                        // e.g. 2025-02-30
+        PatternMismatch(text: string, pattern: string) // the text does not follow the pattern
+        InvalidDate(text: string) // e.g. 2025-02-30
     }
     ```
 

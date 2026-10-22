@@ -33,9 +33,9 @@ The `math` module follows one rule:
 
 ```ez
 type MathError = {
-    Complex          // the result exists only in the complex numbers: sqrt(-1)
-    Indeterminate    // indeterminate form (no current function returns it)
-    Infinite         // the result is infinite: pow(0, -1)
+    Complex // the result exists only in the complex numbers: sqrt(-1)
+    Indeterminate // indeterminate form (no current function returns it)
+    Infinite // the result is infinite: pow(0, -1)
 }
 ```
 

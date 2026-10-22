@@ -48,7 +48,7 @@ type JsonObject = {
 ```ez
 type JsonError = {
     Syntax(message: string, line: int, column: int)
-    NumberOutOfRange(text: string, line: int, column: int)   // an integer too large for int
+    NumberOutOfRange(text: string, line: int, column: int) // an integer too large for int
 }
 ```
 

@@ -243,9 +243,9 @@ function Person.display(self): string {
 
 const ana: Person = { name: 'Ana', age: 30 }
 
-print(ana)             // Ana (30)
-print(`Hi, ${ana}!`)   // Hi, Ana (30)!
-print(ana.debug())     // { name: 'Ana', age: 30 }
+print(ana) // Ana (30)
+print(`Hi, ${ana}!`) // Hi, Ana (30)!
+print(ana.debug()) // { name: 'Ana', age: 30 }
 ```
 
 -   Every value has `display()` (the text `print` shows) and `debug()` (the structure of the value, as written in code). Without a `display` method, both show the structure, except for strings and standard library errors, whose `display()` is readable (`'abc' is not a valid number`).

@@ -9,9 +9,9 @@ The `file` module provides functionality for working with files.
 
     ```ez
     type Mode = {
-        Read      // read
-        Write     // write (overwrites existing content)
-        Append    // write at the end
+        Read // read
+        Write // write (overwrites existing content)
+        Append // write at the end
     }
     ```
 
@@ -37,8 +37,8 @@ type FileError = {
     NotFound(path: string)
     PermissionDenied(path: string)
     IsDirectory(path: string)
-    InvalidUtf8(path: string)              // the content is not valid text
-    Io(path: string, message: string)      // any other failure of the operating system
+    InvalidUtf8(path: string) // the content is not valid text
+    Io(path: string, message: string) // any other failure of the operating system
 }
 ```
 

@@ -15,12 +15,12 @@ positions: int[][][] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
 Elements are accessed by their index, starting at `0`. An index out of range panics.
 
 ```ez
-print(numbers[0])        // 1
+print(numbers[0]) // 1
 print(coordinates[1][0]) // 3
-print(numbers.length())  // 3
-print(2 in numbers)      // true
+print(numbers.length()) // 3
+print(2 in numbers) // true
 
-numbers[0] = 10          // changes the first element
+numbers[0] = 10 // changes the first element
 ```
 
 To go through a list, use a [`for` loop](control-flow.md#for-loop).
